@@ -16,7 +16,6 @@
 
 enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
-enum fileseek {SSET, SCUR, SEND};
 
 /*
     1. inode index starting from 0
