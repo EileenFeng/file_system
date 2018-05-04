@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
         printf("Finish writing free inode %d\n", i);
     }
 
-    for (int i = 0; i < TESTNUM; i++) {
+    for (int i = 0; i < BLOCKNUM; i++) {
         struct free_block fb;
         printf("free block size is %d\n", sizeof(struct free_block));
         fb.next_free = i+1 >= TESTNUM ? END : i+1;
