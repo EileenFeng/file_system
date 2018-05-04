@@ -6,6 +6,7 @@
 #define END -1
 #define FREEB_PADDING 508
 
+enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
 
 /*
