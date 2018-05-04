@@ -5,8 +5,17 @@
 #define UNDEFINED -10
 #define END -1
 #define FREEB_PADDING 508
+#define BLOCKSIZE 512
+#define FALSE 0
+#define TRUE 1
+#define FAIL -1
+#define SUCCESS 0
+#define MAX_NAMELEN 56
+#define MAX_LENGTH 300
+#define MAX_OPENFILE 50
 
 enum file_type{DIR, REG};
+enum fileseek {SSET, SCUR, SEND};
 
 /*
     1. inode index starting from 0
@@ -58,7 +67,7 @@ struct inode {
 struct dirent {
     int type; // DIR OR REG
     int inode_indexs;
-    char filename[56];
+    char filename[MAX_NAMELEN];
 }dirent;
 
 // decides whether ctime is needed
@@ -72,6 +81,7 @@ struct fstat{
 } fstat;
 
 struct file_table_entry{
+    char filepath[MAX_LENGTH]; 
     int inode_index;
     int type;
     int block_index;/* index of the block relative to this file, for instance this is the 5th data
@@ -84,13 +94,13 @@ struct file_table_entry{
 struct file_table{
     int filenum;
     int free_fd_num;
-    int free_id[30];
-    struct file_table_entry entries[30];
+    int free_id[MAX_OPENFILE];
+    struct file_table_entry entries[MAX_OPENFILE];
 }file_table;
 
 struct mounted_disk{
 	int root_inode; // inode index of the root directory of the disk
-	char mp_name[65]; // mounting point absolute filepath
+	char mp_name[MAX_NAMELEN]; // mounting point absolute filepath
 	int blocksize;
 	int inode_region_offset;
 	int data_region_offset;
