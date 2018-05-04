@@ -120,6 +120,24 @@ int main(int argc, char** argv) {
     }
 
     fclose(output_disk);
+    /*
+    FILE* test = fopen("DISK", "rb");
+    char boot[512];
+    fread(boot, 1, 512, test);
+    char super[512];
+    fread(super, 1, 512, test);
+    char inode[1536];
+    fread(inode, 1, 1536, test);
+    char free[1536];
+    fread(free, 1, 1536, test);
+    struct superblock* sbtest = (struct superblock*)super;
+    printf("testing super block %d\n", sbtest->data_offset);
+    struct inode* roott = (struct inode*)inode;
+    printf("testing inode %d\n", (roott+15)->permissions);
+    struct free_block* testf = free;
+    printf("free testt %d\n", (testf+1)->next_free);
+    */
+    
     return SUCCESS;
 
 }

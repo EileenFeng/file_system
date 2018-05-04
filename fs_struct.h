@@ -14,6 +14,7 @@
 #define MAX_LENGTH 300
 #define MAX_OPENFILE 50
 
+enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
 enum fileseek {SSET, SCUR, SEND};
 
