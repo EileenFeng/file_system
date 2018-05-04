@@ -71,14 +71,14 @@ struct dirent {
 }dirent;
 
 // decides whether ctime is needed
-struct fstat{
+struct f_stat{
     int uid; //owner's id
     int gid;
     int filesize;
     int type;
     int permission;
     int inode_index;
-} fstat;
+} f_stat;
 
 struct file_table_entry{
     char filepath[MAX_LENGTH]; 

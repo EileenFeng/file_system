@@ -5,9 +5,14 @@
 
 FILE* output_disk;
 
+#define INODE_SETUP 4
+
 int main(int argc, char** argv) {
     struct superblock sb;
     struct inode root_inode;
+    struct inode home;
+    struct inode reg_user;
+    struct inode super_user;
     char bootbuffer[BLOCKSIZE];
 
     // open output disk image for writing 
@@ -27,8 +32,8 @@ int main(int argc, char** argv) {
     //writing super block
     sb.blocksize = BLOCKSIZE;
     sb.inode_offset = 0; // 16 inodes in total
-    sb.data_offset = 3;
-    sb.free_inode_head = 1; // starts from the second inode, 
+    sb.data_offset = 9;
+    sb.free_inode_head = INODE_SETUP; // starts from the second inode, 
                             // since the first one (with inode index 0) is always the root dir
     sb.free_block_head = 0; // starts from 0
     
@@ -50,7 +55,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    //writing inode region
+    //writing root inode region
     root_inode.inode_index = 0;
     root_inode.parent_inode = -1;
     root_inode.permissions = 755; //rwxr-xr-x
@@ -76,6 +81,10 @@ int main(int argc, char** argv) {
         return FAIL;
     }
 
+    // write home inode
+    
+
+    // write the rest of inodes
     int inode_num = (sb.data_offset - sb.inode_offset) * BLOCKSIZE / sizeof(struct inode);
     printf("Number of inodes is %d\n", inode_num);
     for(int i = 1; i < inode_num; i++) {

@@ -68,6 +68,11 @@ int lib_init() {
         free(inodes);
         return FAIL;
     }
+
+    // read in the root directory
+    
+
+    
     return SUCCESS;
 }
 
