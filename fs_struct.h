@@ -1,8 +1,19 @@
 #define N_DBLOCKS 4
-#define N_IBLOCKS 10
+#define N_IBLOCKS 8
+#define BLOCKNUM 17408
+#define TESTNUM 20
+#define UNDEFINED -10
+#define END -1
+#define FREEB_PADDING 508
 
-enum file_permission{};
 enum file_type{DIR, REG};
+
+/*
+    1. inode index starting from 0
+    2. root directory always have inode index 0 (the first inode)
+    3. there are 16 inodes in total
+    4. empty directories has no data blocks assigned
+*/
 
 struct user {
     int uid;
@@ -12,14 +23,28 @@ struct user {
     char password[20];
 }user;
 
+struct superblock {
+    int blocksize; /* size of blocks in bytes */
+    int inode_offset; /* offset of inode region in blocks */
+    int data_offset; /* data region offset in blocks */
+    int free_inode_head; /* head of free inode list, index */
+    int free_block_head; /* head of free block list, index */
+    //int swap_offset; /* swap region offset in blocks */
+}superblock;
+
+struct free_block {
+    int next_free;
+    char padding[FREEB_PADDING];
+}free_block;
+
 // filename is inside of dirent; also needs to decide wheter c, a, mtime is needed
 struct inode {
-    int inode_index;
+    int inode_index; //starting from 0
     int parent_inode; // inode index to the parent inode
-    int permissions; // file permission
-    int type;
-    int next_inode;
-    int nlink;
+    int permissions; // file permission, uses 000 - 777 number to represent
+    int type; // type of the file
+    int next_free_inode; // only used if the current inode is free
+    int nlink; // equals 0 if this inode is not used
     int size; // file size
     int uid;
     int gid;
