@@ -82,6 +82,7 @@ struct fstat{
 
 struct file_table_entry{
     char filepath[MAX_LENGTH]; 
+    
     int inode_index;
     int type;
     int block_index;/* index of the block relative to this file, for instance this is the 5th data
@@ -98,7 +99,14 @@ struct file_table{
     struct file_table_entry entries[MAX_OPENFILE];
 }file_table;
 
-struct mounted_disk{
+//shell
+struct mounted_disk {
+    char mp_name[MAX_NAMELEN]; // mounting point absolute filepath
+    int diskfd;
+}mounted_disk;
+
+// file sytem
+struct fs_disk{
 	int root_inode; // inode index of the root directory of the disk
 	char mp_name[MAX_NAMELEN]; // mounting point absolute filepath
 	int blocksize;
@@ -109,5 +117,5 @@ struct mounted_disk{
 	int uid;
 	int root_dir_inode_index;
 	void* inode_region;
-}mounted_disk;
+}fs_disk;
 
