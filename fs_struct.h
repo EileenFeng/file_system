@@ -123,3 +123,7 @@ struct fs_disk{
 	void* inode_region;
 }fs_disk;
 
+struct data_block{
+  int block_index;
+  char data[BLOCKSIZE];
+}data_block;

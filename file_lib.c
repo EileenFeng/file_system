@@ -14,8 +14,12 @@ char disk_img[5] = "DISK";
 int disk_fd = UNDEFINED;   
 
 struct superblock* sb = NULL;
-void* inodes = NULL;
+struct inode* rootdir = NULL;
+void* inodes = NULL; // inode region
+
 static struct file_table* open_ft;
+// buffer for storing data blocks
+struct data_block data_buffer[20];
 
 /********** FUNCTION PROTOTYPES **********/
 int lib_init();
@@ -47,7 +51,6 @@ int lib_init() {
         return FAIL;
     }
 
-    open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));
     struct superblock* temp = (struct superblock*)buffer;
     sb->blocksize = temp->blocksize;
     sb->inode_offset = temp->inode_offset;
@@ -69,9 +72,13 @@ int lib_init() {
         return FAIL;
     }
 
+    open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));  
+
+    
+    rootdir = (struct inode*)inodes;
     // read in the root directory
     
-
+    
     
     return SUCCESS;
 }
