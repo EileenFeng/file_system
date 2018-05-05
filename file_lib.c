@@ -9,10 +9,10 @@
 #include "file_lib.h"
 
 /* needs to free
-    1. open file table entries
-    2. open file table
-    3. 'inodes'
-    4. data_buffer entries which are struct 'data_block' (no need to free data buffer)
+   1. open file table entries
+   2. open file table
+   3. 'inodes'
+   4. data_buffer entries which are struct 'data_block' (no need to free data buffer)
 
 */
 
@@ -20,7 +20,7 @@
 /*********** GLOBALS ************/
 // check whether library has been initialized 
 static int init_lib = FALSE;
-static char disk_img[5] = "DISK";
+static char disk_img[20];
 static struct fs_disk cur_disk;
 //int disk_fd = UNDEFINED;  
 //int data_region_offset = UNDEFINED; // gives the byte offset to the data region 
@@ -42,142 +42,149 @@ static int data_buffer_count = 0;
 // void update_ft(struct file_table_entry* new_entry, int new_index);
 
 
-int lib_init() {
-    // open disk
-    cur_disk.diskfd = open(disk_img, O_RDWR);
-    if (cur_disk.diskfd == FAIL) {
-        printf("Open disk image failed.\n");
-        return FAIL;
-    }
-    // read in boot block
-    void* buffer = malloc(BLOCKSIZE);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-        printf("Read in disk boot block failed.\n");
-        free(buffer);
-        return FAIL;
-    }
-    //sb = (struct superblock*)malloc(sizeof(struct superblock));
-    bzero(buffer, BLOCKSIZE);
-
-    // read in superblock
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-        printf("Read in super block failed. \n");
-        free(buffer);
-        return FAIL;
-    }
-
-    struct superblock* temp = (struct superblock*)buffer;
-    cur_disk.sb.blocksize = temp->blocksize;
-    cur_disk.sb.inode_offset = temp->inode_offset;
-    cur_disk.sb.data_offset = temp->data_offset;
-    cur_disk.sb.free_inode_head = temp->free_inode_head;
-    cur_disk.sb.free_block_head = temp->free_block_head;
+int f_mount(char* sourcepath) {
+  // open disk
+  strcpy(disk_img, sourcepath); 
+  cur_disk.diskfd = open(sourcepath, O_RDWR);
+  if (cur_disk.diskfd == FAIL) {
+    printf("Open disk image failed.\n");
+    return FAIL;
+  }
+  // read in boot block
+  void* buffer = malloc(BLOCKSIZE);
+  if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+    printf("Read in disk boot block failed.\n");
     free(buffer);
-    cur_disk.data_region_offset = cur_disk.sb.data_offset * BLOCKSIZE + BLOCKSIZE * 2;
-    printf("superblock info: blocksize: %d ", cur_disk.sb.blocksize);
-    printf("inode_offset %d, data_offset %d ", cur_disk.sb.inode_offset, cur_disk.sb.data_offset);
-    printf("free_inode_head %d, free_block_head %d, data region offset %d\n", cur_disk.sb.free_inode_head, cur_disk.sb.free_block_head, cur_disk.data_region_offset);
+    return FAIL;
+  }
+  //sb = (struct superblock*)malloc(sizeof(struct superblock));
+  bzero(buffer, BLOCKSIZE);
 
-    // read in inode region
-    int inode_blocksize = (cur_disk.sb.data_offset - cur_disk.sb.inode_offset) * BLOCKSIZE;
-    printf("iniode block size is %d\n", inode_blocksize);
-    cur_disk.inodes = malloc(inode_blocksize);
-    if(read(cur_disk.diskfd, cur_disk.inodes, inode_blocksize) != inode_blocksize) {
-        printf("Read in inode region failed. \n");
-        free(cur_disk.inodes);
-        return FAIL;
-    }
+  // read in superblock
+  if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+    printf("Read in super block failed. \n");
+    free(buffer);
+    return FAIL;
+  }
+  struct superblock* temp = (struct superblock*)buffer;
+  cur_disk.sb.blocksize = temp->blocksize;
+  cur_disk.sb.inode_offset = temp->inode_offset;
+  cur_disk.sb.data_offset = temp->data_offset;
+  cur_disk.sb.free_inode_head = temp->free_inode_head;
+  cur_disk.sb.free_block_head = temp->free_block_head;
+  free(buffer);
+  cur_disk.data_region_offset = cur_disk.sb.data_offset * BLOCKSIZE + BLOCKSIZE * 2;
+  printf("superblock info: blocksize: %d ", cur_disk.sb.blocksize);
+  printf("inode_offset %d, data_offset %d ", cur_disk.sb.inode_offset, cur_disk.sb.data_offset);
+  printf("free_inode_head %d, free_block_head %d, data region offset %d\n", cur_disk.sb.free_inode_head, cur_disk.sb.free_block_head, cur_disk.data_region_offset);
 
-    //set up open file table
-    open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));  
-    open_ft->filenum = 0;
-    open_ft->free_fd_num = MAX_OPENFILE;
-    for(int i = 0; i < MAX_OPENFILE; i++) {
-        open_ft->free_id[i] = i+1;
-        open_ft->entries[i] = NULL;
-    }
+  // read in inode region
+  int inode_blocksize = (cur_disk.sb.data_offset - cur_disk.sb.inode_offset) * BLOCKSIZE;
+  printf("iniode block size is %d\n", inode_blocksize);
+  cur_disk.inodes = malloc(inode_blocksize);
+  if(read(cur_disk.diskfd, cur_disk.inodes, inode_blocksize) != inode_blocksize) {
+    printf("Read in inode region failed. \n");
+    free(cur_disk.inodes);
+    return FAIL;
+  }
 
-    //create an entry for root directory in the open file table
-    cur_disk.root_inode = (struct inode*)(cur_disk.inodes);
-    struct file_table_entry* root_entry = malloc(sizeof(struct file_table_entry));
-    strcpy(root_entry->filepath, "/");
-    root_entry->inode_index = ROOT_INDEX;
-    root_entry->type = DIR;
-    root_entry->block_index = 0;
-    root_entry->block_offset = cur_disk.root_inode->size > 0 ? cur_disk.root_inode->dblocks[0] : UNDEFINED;
-    root_entry->offset = 0;
-    root_entry->open_num = 0;
-    //update open file table
-    int temp_index = MAX_OPENFILE - open_ft->free_fd_num;
-    root_entry->fd = open_ft->free_id[temp_index];
-    cur_disk.rootdir_fd = root_entry->fd;
-    printf("fd for root directory is %d\n", root_entry->fd);
-    update_ft(root_entry, temp_index);
-    /*
+  //set up open file table
+  open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));  
+  open_ft->filenum = 0;
+  open_ft->free_fd_num = MAX_OPENFILE;
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    open_ft->free_id[i] = i+1;
+    open_ft->entries[i] = NULL;
+  }
+
+  //create an entry for root directory in the open file table
+  cur_disk.root_inode = (struct inode*)(cur_disk.inodes);
+  struct file_table_entry* root_entry = malloc(sizeof(struct file_table_entry));
+  strcpy(root_entry->filepath, "/");
+  root_entry->inode_index = ROOT_INDEX;
+  root_entry->type = DIR;
+  root_entry->block_index = 0;
+  root_entry->block_offset = cur_disk.root_inode->size > 0 ? cur_disk.root_inode->dblocks[0] : UNDEFINED;
+  root_entry->offset = 0;
+  root_entry->open_num = 0;
+  //update open file table
+  int temp_index = MAX_OPENFILE - open_ft->free_fd_num;
+  root_entry->fd = open_ft->free_id[temp_index];
+  cur_disk.rootdir_fd = root_entry->fd;
+  printf("fd for root directory is %d\n", root_entry->fd);
+  update_ft(root_entry, temp_index);
+  /*
     open_ft->free_id[temp_index] = UNDEFINED;
     open_ft->free_fd_num --;
     open_ft->entries[open_ft->filenum] = root_entry;
     open_ft->filenum ++;
-    */
-   printf("data block offset for the first of root dir is %d\n", cur_disk.root_inode->dblocks[0]);
-   int temp_offset = cur_disk.data_region_offset + cur_disk.root_inode->dblocks[0];
-   lseek(cur_disk.diskfd, temp_offset, SEEK_SET);
-   struct data_block* root_bone = (struct data_block*)(malloc(sizeof(struct data_block)));
-   root_bone->block_index = cur_disk.root_inode->dblocks[0];
-   if(read(cur_disk.diskfd, (void*)(root_bone->data), BLOCKSIZE) != BLOCKSIZE) {
-       free(cur_disk.inodes);
-       free(root_entry);
-       free(open_ft);
-       printf("Read root directory data block one failed\n");
-       return FAIL;
-   }
+  */
+  printf("data block offset for the first of root dir is %d\n", cur_disk.root_inode->dblocks[0]);
+  int temp_offset = cur_disk.data_region_offset + cur_disk.root_inode->dblocks[0];
+  lseek(cur_disk.diskfd, temp_offset, SEEK_SET);
+  struct data_block* root_bone = (struct data_block*)(malloc(sizeof(struct data_block)));
+  root_bone->block_index = cur_disk.root_inode->dblocks[0];
+  if(read(cur_disk.diskfd, (void*)(root_bone->data), BLOCKSIZE) != BLOCKSIZE) {
+    free(cur_disk.inodes);
+    free(root_entry);
+    free(open_ft);
+    printf("Read root directory data block one failed\n");
+    return FAIL;
+  }
 
-    return SUCCESS;
+  return SUCCESS;
 }
 
 static char** parse_filepath(char* filepath) {
-    char delim[2] = "/";
-    int len = 20;
-    int size = 20;
-    int count = 0;
-    char** parse_result = (char**)malloc(sizeof(char*) * size);
-    char* token = strtok(filepath, delim);
-    while(token != NULL) {
-        if(count >= size) {
-            size += len;
-            parse_result = realloc(parse_result, sizeof(char*) * size);
-        }
-        char* temp = malloc(sizeof(char) * (strlen(token) + 1));
-        strcpy(temp, token);
-        parse_result[count] = temp;
-        printf("parse result %d is %s\n", count, parse_result[count]);
-        token = strtok(NULL, delim);
-        count ++;
+  char delim[2] = "/";
+  int len = 20;
+  int size = 20;
+  int count = 0;
+  char file_path[MAX_LENGTH];
+  strcpy(file_path, filepath);
+  char** parse_result = (char**)malloc(sizeof(char*) * size);
+  char* token;
+  printf("filepath is %s\n", filepath);
+  token = strtok(file_path, delim);
+  while(token != NULL) {
+    if(count >= size) {
+      size += len;
+      parse_result = realloc(parse_result, sizeof(char*) * size);
     }
-    parse_result[count] = NULL;
-    return parse_result;
+    char* temp = malloc(sizeof(char) * (strlen(token) + 1));
+    strcpy(temp, token);
+    parse_result[count] = temp;
+    printf("parse result %d is %s\n", count, parse_result[count]);
+    token = strtok(NULL, delim);
+    count ++;
+  }
+  parse_result[count] = NULL;
+  return parse_result;
 }
 
 int f_open(char* filepath, char* access) {
-    char** parse_path = parse_filepath(filepath);
-    return 0;
-}
-
-int main() {
-    lib_init();
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* temp = parse_path[count];
+  while(temp != NULL) {
+    printf("current file token is %s\n", temp);
+    count ++;
+    temp = parse_path[count];
+  }
+  return 0;
 }
 
 void update_ft(struct file_table_entry* new_entry, int new_index) {
-    open_ft->free_id[new_index] = UNDEFINED;
-    open_ft->free_fd_num --;
-    open_ft->entries[open_ft->filenum] = new_entry;
-    open_ft->filenum ++;
+  open_ft->free_id[new_index] = UNDEFINED;
+  open_ft->free_fd_num --;
+  open_ft->entries[open_ft->filenum] = new_entry;
+  open_ft->filenum ++;
 }
 
 
 /*
-    1. parse
-    2. open
-    3. write
-    4. open
+  1. parse
+  2. open
+  3. write
+  4. open
 */
