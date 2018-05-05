@@ -16,6 +16,10 @@
 #define DIRENT_SIZE 64
 #define SUPERUSER 1
 #define REGUSER 2
+#define INODE_SETUP 4
+#define ROOT_INDEX 0
+#define HOME_INDEX 1
+#define DEFAULT_PERM 755 //rwxr-xr-x
 
 enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
@@ -85,22 +89,23 @@ struct f_stat{
 } f_stat;
 
 struct file_table_entry{
-    char filepath[MAX_LENGTH]; 
-    
+    int fd;
     int inode_index;
     int type;
     int block_index;/* index of the block relative to this file, for instance this is the 5th data
                       block for this file, then ‘block_index’ of this block is 5 */
-	int block_offset; // offset of block in the data region
+	int block_offset; // offset index of block in the data region
 	int offset; //offset within a block
     int open_num; // if type == DIR, this field indicates the number of open files under this directory
+    char filepath[MAX_LENGTH]; 
 }file_table_entry;
 
 struct file_table{
+    // file descriptor starts from 1
     int filenum;
     int free_fd_num;
     int free_id[MAX_OPENFILE];
-    struct file_table_entry entries[MAX_OPENFILE];
+    struct file_table_entry* entries[MAX_OPENFILE];
 }file_table;
 
 //shell
@@ -111,19 +116,23 @@ struct mounted_disk {
 
 // file sytem
 struct fs_disk{
-	int root_inode; // inode index of the root directory of the disk
-	char mp_name[MAX_NAMELEN]; // mounting point absolute filepath
-	int blocksize;
-	int inode_region_offset;
-	int data_region_offset;
-	int free_block;
-	int free_inode;
+    int diskfd;
 	int uid;
-	int root_dir_inode_index;
-	void* inode_region;
+	int data_region_offset; // byte offset 
+    int rootdir_fd;
+    struct inode* root_inode;
+    struct superblock sb;
+	void* inodes;
+	//char mp_name[MAX_NAMELEN]; // mounting point absolute filepath
+	//int root_inode; // inode index of the root directory of the disk
+	//int blocksize;
+	//int inode_region_offset;
+	//int free_block;
+	//int free_inode;
+	//int root_dir_inode_index;
 }fs_disk;
 
 struct data_block{
-  int block_index;
+  int block_index; // data block index relative to the data region
   char data[BLOCKSIZE];
 }data_block;

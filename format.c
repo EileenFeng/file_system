@@ -5,11 +5,6 @@
 
 FILE* output_disk;
 
-#define INODE_SETUP 4
-#define ROOT_INDEX 0
-#define HOME_INDEX 1
-#define DEFAULT_PERM 755 //rwxr-xr-x
-
 int main(int argc, char** argv) {
     struct superblock sb;
     struct inode root_inode;
@@ -77,7 +72,7 @@ int main(int argc, char** argv) {
     }
     root_inode.i2block = UNDEFINED;
     root_inode.i3block = UNDEFINED;
-    root_inode.last_block_index = UNDEFINED;
+    root_inode.last_block_index = 0;
     int inode_size = sizeof(struct inode);
     printf("root inode size is %d and root inodes %d\n", inode_size, sizeof(root_inode));
     if(fwrite(&root_inode, 1, sizeof(root_inode), output_disk) != inode_size) {
@@ -104,7 +99,7 @@ int main(int argc, char** argv) {
     }
     home.i2block = UNDEFINED;
     home.i3block = UNDEFINED;
-    home.last_block_index = UNDEFINED;
+    home.last_block_index = 1;
     printf("home inode size is %d and root inodes %d\n", inode_size, sizeof(home));
     if(fwrite(&home, 1, sizeof(home), output_disk) != inode_size) {
         printf("Writing home directory inode failed\n");
