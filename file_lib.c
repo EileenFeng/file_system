@@ -189,6 +189,7 @@ int f_opendir(char* filepath) {
     count ++;
     curdir = parse_path[count];
   }
+  printf("Opendir: return value is %d\n", parent_fd);
   return parent_fd;
 }
 
