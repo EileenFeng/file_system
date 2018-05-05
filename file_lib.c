@@ -160,8 +160,35 @@ struct dirent* f_readdir(int dir_fd) {
         printf("Directory file is empty. No content to read for f_readdir\n");
         return NULL;
     }
-    
+    printf("blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
+    int file_offset = cur_disk.data_region_offset + target->block_offset * 512 + target->offset;
+    printf("file offset readdir: %d\n", file_offset);
+    lseek(cur_disk.diskfd, file_offset, SEEK_SET);
+    struct dirent* ret = (struct dirent*)malloc(sizeof(struct dirent));
+    if(read(cur_disk.diskfd, ret, DIRENT_SIZE) != DIRENT_SIZE) {
+        printf("Read in dirent failed\n");
+        free(ret);
+        return NULL;
+    }
+    printf("file name for the ret is %s\n", ret->filename);
+    int new_offset = target->offset + DIRENT_SIZE;
+    if(new_offset >= BLOCKSIZE) {
+        struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * BLOCKSIZE);
+        target->block_index ++;
+        int new_blockindex = target->block_index;
+        printf("Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
+        if(new_blockindex < N_DBLOCKS) {
+            target->block_offset = temp_inode->dblocks[new_blockindex];
+        } else if (new_blockindex < LEVELONE) {
+            
+        }
+        target->offset = 0;
 
+    } else {
+        target->offset = new_offset;
+    }
+
+    return ret;
 }
 
 static char** parse_filepath(char* filepath) {
