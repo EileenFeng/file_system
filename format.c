@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
 
     fclose(output_disk);
 
-    /*
+    
     FILE* test = fopen("DISK", "rb");
     char boot[512];
     fread(boot, 1, 512, test);
@@ -244,10 +244,10 @@ int main(int argc, char** argv) {
     printf("testing super block %d\n", sbtest->free_inode_head);
     struct inode* roott = (struct inode*)inode;
     printf("testing inode %d\n", (roott+1)->size);
-    struct free_block* testf = (struct free_block*)(datablock + 512*2);
-    printf("dirent testt %d\n", testf->next_free);
+    struct dirent* testf = (struct dirent*)(datablock + 512);
+    printf("dirent testt %s\n", testf->filename);
     fclose(test);
-    */
+    
     
     return SUCCESS;
 

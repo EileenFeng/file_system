@@ -73,7 +73,10 @@ int f_mount(char* sourcepath) {
   cur_disk.sb.free_inode_head = temp->free_inode_head;
   cur_disk.sb.free_block_head = temp->free_block_head;
   free(buffer);
+  //get region offsets
+  //cur_disk.inode_region_offset = cur.disk.sb.inode_offset * BLOCKSIZE + BLOCKSIZE * 2;
   cur_disk.data_region_offset = cur_disk.sb.data_offset * BLOCKSIZE + BLOCKSIZE * 2;
+  //printf("inode region offset is %d\n", cur_disk.inode_region_offset);
   printf("superblock info: blocksize: %d ", cur_disk.sb.blocksize);
   printf("inode_offset %d, data_offset %d ", cur_disk.sb.inode_offset, cur_disk.sb.data_offset);
   printf("free_inode_head %d, free_block_head %d, data region offset %d\n", cur_disk.sb.free_inode_head, cur_disk.sb.free_block_head, cur_disk.data_region_offset);
@@ -135,6 +138,18 @@ int f_mount(char* sourcepath) {
   return SUCCESS;
 }
 
+int f_open(char* filepath, char* access) {
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* temp = parse_path[count];
+  while(temp != NULL) {
+    printf("current file token is %s\n", temp);
+    count ++;
+    temp = parse_path[count];
+  }
+  return 0;
+} 
+
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
@@ -162,23 +177,41 @@ static char** parse_filepath(char* filepath) {
   return parse_result;
 }
 
-int f_open(char* filepath, char* access) {
-  char** parse_path = parse_filepath(filepath);
-  int count = 0;
-  char* temp = parse_path[count];
-  while(temp != NULL) {
-    printf("current file token is %s\n", temp);
-    count ++;
-    temp = parse_path[count];
-  }
-  return 0;
-}
-
-void update_ft(struct file_table_entry* new_entry, int new_index) {
+static void update_ft(struct file_table_entry* new_entry, int new_index) {
   open_ft->free_id[new_index] = UNDEFINED;
   open_ft->free_fd_num --;
   open_ft->entries[open_ft->filenum] = new_entry;
   open_ft->filenum ++;
+}
+
+static struct dirent** get_dirents(int inode_index) {
+  struct inode* target = (struct inode*)(inodes + inode_index * BLOCKSIZE);
+  if(target->nlink == 0) {
+    printf("Invalid inode! Inode is free!\n");
+    return NULL;
+  }
+  if(target->type != DIR) {
+    printf("Input file is not a directory! \n");
+    return NULL;
+  }
+  if(target->size == 0) {
+    printf("Directory does not contain any files\n");
+    return NULL;
+  }
+  int bytestoread = target->size;
+  int size = 5;
+  int dirent_num = size;
+
+  struct dirrent** res = (struct dirent**)malloc(sizeof(dirent*) * size);
+  for(int i = 0; i < N_DBLOCKS; i++) {
+    if(bytestoread <= 0) {
+      return res;
+    }
+    int read_bytes = bytestoread < BLOCKSIZE ? bytestoread : BLOCKSIZE;
+    int block_index = target->dblocks[i];
+    
+  }
+  
 }
 
 
