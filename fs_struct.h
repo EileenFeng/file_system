@@ -95,7 +95,8 @@ struct file_table_entry{
   int block_index;/* index of the block relative to this file, for instance this is the 5th data
 		     block for this file, then ‘block_index’ of this block is 5 */
   int block_offset; // offset index of block in the data region
-  int offset; //offset within a block
+  int offset; //offset within a block; 0 <= offset <512
+              //once hit 512, update offset = 0 as well as block_offset, incre block_index
   int open_num; // if type == DIR, this field indicates the number of open files under this directory
   char filepath[MAX_LENGTH]; 
 }file_table_entry;

@@ -150,6 +150,20 @@ int f_open(char* filepath, char* access) {
   return 0;
 } 
 
+struct dirent* f_readdir(int dir_fd) {
+    struct file_table_entry* target = open_ft->entries[dir_fd];
+    if(target == NULL) {
+        printf("Invalid directory file descriptor for f_readdir\n");
+        return NULL;
+    }
+    if(target->block_offset == UNDEFINED) {
+        printf("Directory file is empty. No content to read for f_readdir\n");
+        return NULL;
+    }
+    
+
+}
+
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
@@ -184,8 +198,12 @@ static void update_ft(struct file_table_entry* new_entry, int new_index) {
   open_ft->filenum ++;
 }
 
+
+
+
+/*
 static struct dirent** get_dirents(int inode_index) {
-  struct inode* target = (struct inode*)(inodes + inode_index * BLOCKSIZE);
+  struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * BLOCKSIZE);
   if(target->nlink == 0) {
     printf("Invalid inode! Inode is free!\n");
     return NULL;
@@ -202,18 +220,27 @@ static struct dirent** get_dirents(int inode_index) {
   int size = 5;
   int dirent_num = size;
 
-  struct dirrent** res = (struct dirent**)malloc(sizeof(dirent*) * size);
+  struct dirent** res = (struct dirent**)malloc(sizeof(struct dirent*) * size);
+  void* buffer = malloc(BLOCKSIZE);
   for(int i = 0; i < N_DBLOCKS; i++) {
     if(bytestoread <= 0) {
-      return res;
+        free(buffer);
+        return res;
     }
+    bzero(buffer, BLOCKSIZE);
     int read_bytes = bytestoread < BLOCKSIZE ? bytestoread : BLOCKSIZE;
     int block_index = target->dblocks[i];
-    
+    lseek(cur_disk.diskfd, cur_disk.data_region_offset + block_index * BLOCKSIZE, SEEK_SET);
+    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+        printf("read in data block in get dirents failed in dblocks\n");
+        free(buffer);
+
+        return NULL;
+    }
   }
   
 }
-
+*/
 
 /*
   1. parse
