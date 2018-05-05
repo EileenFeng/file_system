@@ -197,7 +197,8 @@ int main(int argc, char** argv) {
     struct dirent* homedir = (struct dirent*)buffer;
     homedir->type = DIR;
     homedir->inode_index = HOME_INDEX;
-    strcpy(homedir->filename, "/home");
+    strcpy(homedir->filename, "home");
+    printf("copying home %s\n", homedir->filename);
     if(fwrite(buffer, 1, BLOCKSIZE, output_disk) != BLOCKSIZE) {
         printf("write root dir data block failed\n");
     }
@@ -210,18 +211,19 @@ int main(int argc, char** argv) {
     struct dirent* rusr= spusr + 1;
     spusr->type = DIR;
     spusr->inode_index = 2;
-    strcpy(spusr->filename, "/home/susr");
+    strcpy(spusr->filename, "susr");
     rusr->type = DIR;
     rusr->inode_index = 3;
-    strcpy(rusr->filename, "/home/rusr");
+    strcpy(rusr->filename, "rusr");
     if(fwrite(buffer, 1, BLOCKSIZE, output_disk) != BLOCKSIZE) {
         printf("write home dir data block failed\n");
     }
-
+    free(buffer);
+    
     for (int i = 2; i < BLOCKNUM; i++) {
         struct free_block fb;
         printf("free block size is %d\n", sizeof(struct free_block));
-        fb.next_free = i+1 >= TESTNUM ? END : i+1;
+        fb.next_free = i+1 >= BLOCKNUM ? END : i+1;
         printf("free block %d next free is %d\n", i, fb.next_free);
         bzero(fb.padding, FREEB_PADDING);
         if(fwrite(&fb, 1, sizeof(fb), output_disk) != sizeof(fb)) {
@@ -232,22 +234,24 @@ int main(int argc, char** argv) {
     }
 
     fclose(output_disk);
+
     /*
     FILE* test = fopen("DISK", "rb");
     char boot[512];
     fread(boot, 1, 512, test);
     char super[512];
     fread(super, 1, 512, test);
-    char inode[1536];
-    fread(inode, 1, 1536, test);
-    char free[1536];
-    fread(free, 1, 1536, test);
+    char inode[1536*3];
+    fread(inode, 1, 1536*3, test);
+    char datablock[1536];
+    fread(datablock, 1, 1536, test);
     struct superblock* sbtest = (struct superblock*)super;
-    printf("testing super block %d\n", sbtest->data_offset);
+    printf("testing super block %d\n", sbtest->free_inode_head);
     struct inode* roott = (struct inode*)inode;
-    printf("testing inode %d\n", (roott+15)->permissions);
-    struct free_block* testf = free;
-    printf("free testt %d\n", (testf+1)->next_free);
+    printf("testing inode %d\n", (roott+1)->size);
+    struct free_block* testf = (struct free_block*)(datablock + 512*2);
+    printf("dirent testt %d\n", testf->next_free);
+    fclose(test);
     */
     
     return SUCCESS;
