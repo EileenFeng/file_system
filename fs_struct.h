@@ -13,6 +13,9 @@
 #define MAX_NAMELEN 56
 #define MAX_LENGTH 300
 #define MAX_OPENFILE 50
+#define DIRENT_SIZE 64
+#define SUPERUSER 1
+#define REGUSER 2
 
 enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
@@ -64,9 +67,10 @@ struct inode {
     int last_block_index; // keeps track of the last block index, useful during write when needs to allocate more blocks
 }inode;
 
+// size 64 bytes
 struct dirent {
     int type; // DIR OR REG
-    int inode_indexs;
+    int inode_index;
     char filename[MAX_NAMELEN];
 }dirent;
 

@@ -6,13 +6,16 @@
 FILE* output_disk;
 
 #define INODE_SETUP 4
+#define ROOT_INDEX 0
+#define HOME_INDEX 1
+#define DEFAULT_PERM 755 //rwxr-xr-x
 
 int main(int argc, char** argv) {
     struct superblock sb;
     struct inode root_inode;
     struct inode home;
-    struct inode reg_user;
     struct inode super_user;
+    struct inode reg_user;
     char bootbuffer[BLOCKSIZE];
 
     // open output disk image for writing 
@@ -35,7 +38,7 @@ int main(int argc, char** argv) {
     sb.data_offset = 9;
     sb.free_inode_head = INODE_SETUP; // starts from the second inode, 
                             // since the first one (with inode index 0) is always the root dir
-    sb.free_block_head = 0; // starts from 0
+    sb.free_block_head = 2; // starts from 0, used by root and home
     
     int sb_size = sizeof(struct superblock);
     int padding_length = BLOCKSIZE - sb_size;
@@ -56,16 +59,17 @@ int main(int argc, char** argv) {
     }
 
     //writing root inode region
-    root_inode.inode_index = 0;
-    root_inode.parent_inode = -1;
-    root_inode.permissions = 755; //rwxr-xr-x
+    root_inode.inode_index = ROOT_INDEX;
+    root_inode.parent_inode = UNDEFINED;
+    root_inode.permissions = DEFAULT_PERM; //rwxr-xr-x
     root_inode.type = DIR;
     root_inode.next_free_inode = UNDEFINED;
     root_inode.nlink = 1;
-    root_inode.size = 0;
+    root_inode.size = DIRENT_SIZE;
     root_inode.uid = UNDEFINED;
     root_inode.gid = UNDEFINED;
-    for(int i = 0; i < N_DBLOCKS; i++) {
+    root_inode.dblocks[0] = 0;
+    for(int i = 1; i < N_DBLOCKS; i++) {
         root_inode.dblocks[i] = UNDEFINED;
     }
     for(int i = 0; i < N_IBLOCKS; i++) {
@@ -75,19 +79,91 @@ int main(int argc, char** argv) {
     root_inode.i3block = UNDEFINED;
     root_inode.last_block_index = UNDEFINED;
     int inode_size = sizeof(struct inode);
-    printf("inode size is %d and root inodes %d\n", inode_size, sizeof(root_inode));
+    printf("root inode size is %d and root inodes %d\n", inode_size, sizeof(root_inode));
     if(fwrite(&root_inode, 1, sizeof(root_inode), output_disk) != inode_size) {
         printf("Writing root directory inode failed\n");
         return FAIL;
     }
 
     // write home inode
+    home.inode_index = HOME_INDEX;
+    home.parent_inode = ROOT_INDEX; // parent inode is root inode
+    home.permissions = DEFAULT_PERM; //rwxr-xr-x
+    home.type = DIR;
+    home.next_free_inode = UNDEFINED;
+    home.nlink = 1;
+    home.size = DIRENT_SIZE * 2;
+    home.uid = UNDEFINED;
+    home.gid = UNDEFINED;
+    home.dblocks[0] = 1;
+    for(int i = 1; i < N_DBLOCKS; i++) {
+        home.dblocks[i] = UNDEFINED;
+    }
+    for(int i = 0; i < N_IBLOCKS; i++) {
+        home.iblocks[i] = UNDEFINED;
+    }
+    home.i2block = UNDEFINED;
+    home.i3block = UNDEFINED;
+    home.last_block_index = UNDEFINED;
+    printf("home inode size is %d and root inodes %d\n", inode_size, sizeof(home));
+    if(fwrite(&home, 1, sizeof(home), output_disk) != inode_size) {
+        printf("Writing home directory inode failed\n");
+        return FAIL;
+    }
+
+    super_user.inode_index = 2;
+    super_user.parent_inode = HOME_INDEX;
+    super_user.permissions = DEFAULT_PERM; //rwxr-xr-x
+    super_user.type = DIR;
+    super_user.next_free_inode = UNDEFINED;
+    super_user.nlink = 1;
+    super_user.size = 0;
+    super_user.uid = SUPERUSER;
+    super_user.gid = UNDEFINED;
+    for(int i = 0; i < N_DBLOCKS; i++) {
+        super_user.dblocks[i] = UNDEFINED;
+    }
+    for(int i = 0; i < N_IBLOCKS; i++) {
+        super_user.iblocks[i] = UNDEFINED;
+    }
+    super_user.i2block = UNDEFINED;
+    super_user.i3block = UNDEFINED;
+    super_user.last_block_index = UNDEFINED;
+    printf("super_user inode size is %d and root inodes %d\n", inode_size, sizeof(super_user));
+    if(fwrite(&super_user, 1, sizeof(super_user), output_disk) != inode_size) {
+        printf("Writing super user directory inode failed\n");
+        return FAIL;
+    }
+
+    reg_user.inode_index = 3;
+    reg_user.parent_inode = HOME_INDEX;
+    reg_user.permissions = DEFAULT_PERM; //rwxr-xr-x
+    reg_user.type = DIR;
+    reg_user.next_free_inode = UNDEFINED;
+    reg_user.nlink = 1;
+    reg_user.size = 0;
+    reg_user.uid = REGUSER;
+    reg_user.gid = UNDEFINED;
+    for(int i = 0; i < N_DBLOCKS; i++) {
+        reg_user.dblocks[i] = UNDEFINED;
+    }
+    for(int i = 0; i < N_IBLOCKS; i++) {
+        reg_user.iblocks[i] = UNDEFINED;
+    }
+    reg_user.i2block = UNDEFINED;
+    reg_user.i3block = UNDEFINED;
+    reg_user.last_block_index = UNDEFINED;
+    printf("reg_user inode size is %d and root inodes %d\n", inode_size, sizeof(reg_user));
+    if(fwrite(&reg_user, 1, sizeof(reg_user), output_disk) != inode_size) {
+        printf("Writing reg_user directory inode failed\n");
+        return FAIL;
+    }
     
 
     // write the rest of inodes
     int inode_num = (sb.data_offset - sb.inode_offset) * BLOCKSIZE / sizeof(struct inode);
     printf("Number of inodes is %d\n", inode_num);
-    for(int i = 1; i < inode_num; i++) {
+    for(int i = INODE_SETUP; i < inode_num; i++) {
         struct inode temp_free;
         temp_free.inode_index = i;
         temp_free.parent_inode = i-1;
@@ -115,7 +191,34 @@ int main(int argc, char** argv) {
         printf("Finish writing free inode %d\n", i);
     }
 
-    for (int i = 0; i < BLOCKNUM; i++) {
+    // write root block data block
+    void* buffer = malloc(BLOCKSIZE);
+    bzero(buffer, BLOCKSIZE);
+    struct dirent* homedir = (struct dirent*)buffer;
+    homedir->type = DIR;
+    homedir->inode_index = HOME_INDEX;
+    strcpy(homedir->filename, "/home");
+    if(fwrite(buffer, 1, BLOCKSIZE, output_disk) != BLOCKSIZE) {
+        printf("write root dir data block failed\n");
+    }
+
+    printf("root data block contains: %s\n", homedir->filename);
+
+    // write home dir data block
+    bzero(buffer, BLOCKSIZE);
+    struct dirent* spusr = (struct dirent*)buffer;
+    struct dirent* rusr= spusr + 1;
+    spusr->type = DIR;
+    spusr->inode_index = 2;
+    strcpy(spusr->filename, "/home/susr");
+    rusr->type = DIR;
+    rusr->inode_index = 3;
+    strcpy(rusr->filename, "/home/rusr");
+    if(fwrite(buffer, 1, BLOCKSIZE, output_disk) != BLOCKSIZE) {
+        printf("write home dir data block failed\n");
+    }
+
+    for (int i = 2; i < BLOCKNUM; i++) {
         struct free_block fb;
         printf("free block size is %d\n", sizeof(struct free_block));
         fb.next_free = i+1 >= TESTNUM ? END : i+1;
@@ -150,3 +253,4 @@ int main(int argc, char** argv) {
     return SUCCESS;
 
 }
+
