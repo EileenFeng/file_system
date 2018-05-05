@@ -32,8 +32,8 @@ static struct fs_disk cur_disk;
 
 static struct file_table* open_ft;
 // buffer for storing data blocks
-static struct data_block* data_buffer[20];
-static int data_buffer_count = 0;
+//static struct data_block* data_buffer[20];
+//static int data_buffer_count = 0;
 
 /********** FUNCTION PROTOTYPES **********/
 // int lib_init();
@@ -122,6 +122,7 @@ int f_mount(char* sourcepath) {
   open_ft->entries[open_ft->filenum] = root_entry;
   open_ft->filenum ++;
   */
+  /*
   printf("data block offset for the first of root dir is %d\n", cur_disk.root_inode->dblocks[0]);
   int temp_offset = cur_disk.data_region_offset + cur_disk.root_inode->dblocks[0];
   lseek(cur_disk.diskfd, temp_offset, SEEK_SET);
@@ -134,9 +135,12 @@ int f_mount(char* sourcepath) {
     printf("Read root directory data block one failed\n");
     return FAIL;
   }
+  */
 
   return SUCCESS;
 }
+
+
 
 int f_open(char* filepath, char* access) {
   char** parse_path = parse_filepath(filepath);
@@ -149,6 +153,17 @@ int f_open(char* filepath, char* access) {
   }
   return 0;
 }
+
+int f_opendir(char* filepath) {
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* curdir = parse_path[count];
+  struct dirent* root_entry = f_readdir(cur_disk.rootdir_fd);
+  while(curdir != NULL) {
+
+  }
+}
+
 
 struct dirent* f_readdir(int dir_fd) {
   struct file_table_entry* target = open_ft->entries[dir_fd-1];
@@ -165,7 +180,7 @@ struct dirent* f_readdir(int dir_fd) {
   printf("blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
   int file_offset = cur_disk.data_region_offset + target->block_offset * 512 + target->offset;
   printf("file offset readdir: %d\n", file_offset);
-  if(file_offset > temp_inode->size) {
+  if(file_offset > temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
     printf("End of file\n");
     return NULL;
   }
@@ -280,6 +295,29 @@ struct dirent* f_readdir(int dir_fd) {
   printf("file name for the ret is %s\n", ret->filename);
   return ret;
 }
+
+
+
+int f_rewind(int fd) {
+  struct file_table_entry* target = open_ft->entries[fd - 1];
+  if (target == NULL) {
+    printf("Invalid file descriptor\n");
+    return FAIL;
+  }
+  struct inode* target_inode = (struct inode*)(cur_disk.inodes + target->inode_index);
+  target->block_index = 0;
+  target->offset = 0;
+  if(target_inode->size == 0) {
+    printf("Rewinding an empty file\n");
+    target->block_offset = UNDEFINED;
+  } else {
+    target->block_offset = target_inode->dblocks[0];
+  }
+  printf("new block_offset is %d\n", open_ft->entries[fd - 1]->block_offset);
+  return SUCCESS;
+}
+
+
 
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
