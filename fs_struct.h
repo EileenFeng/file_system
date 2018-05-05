@@ -20,6 +20,7 @@
 #define ROOT_INDEX 0
 #define HOME_INDEX 1
 #define DEFAULT_PERM 755 //rwxr-xr-x
+#define TABLE_ENTRYNUM 128
 #define LEVELONE 520
 #define LEVELTWO 16904
 #define LEVELTHREE 2114056
@@ -71,7 +72,7 @@ struct inode {
   int iblocks[N_IBLOCKS];
   int i2block;
   int i3block;
-  int last_block_index; // keeps track of the last block index, useful during write when needs to allocate more blocks
+  int last_block_offset; // keeps track of the last block index, useful during write when needs to allocate more blocks
 }inode;
 
 // size 64 bytes
@@ -101,7 +102,7 @@ struct file_table_entry{
   int offset; //offset within a block; 0 <= offset <512
               //once hit 512, update offset = 0 as well as block_offset, incre block_index
   int open_num; // if type == DIR, this field indicates the number of open files under this directory
-  char filepath[MAX_LENGTH]; 
+  char filepath[MAX_LENGTH];
 }file_table_entry;
 
 struct file_table{
@@ -122,7 +123,7 @@ struct mounted_disk {
 struct fs_disk{
   int diskfd;
   int uid;
-  int data_region_offset; // byte offset 
+  int data_region_offset; // byte offset
   //int inode_region_offset; // byte offset
   int rootdir_fd;
   struct inode* root_inode;

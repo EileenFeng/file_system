@@ -9,21 +9,21 @@
 #include "file_lib.h"
 
 /* needs to free
-   1. open file table entries
-   2. open file table
-   3. 'inodes'
-   4. data_buffer entries which are struct 'data_block' (no need to free data buffer)
+1. open file table entries
+2. open file table
+3. 'inodes'
+4. data_buffer entries which are struct 'data_block' (no need to free data buffer)
 
 */
 
 
 /*********** GLOBALS ************/
-// check whether library has been initialized 
+// check whether library has been initialized
 static int init_lib = FALSE;
 static char disk_img[20];
 static struct fs_disk cur_disk;
-//int disk_fd = UNDEFINED;  
-//int data_region_offset = UNDEFINED; // gives the byte offset to the data region 
+//int disk_fd = UNDEFINED;
+//int data_region_offset = UNDEFINED; // gives the byte offset to the data region
 
 //struct superblock sb;
 //static struct inode* root_inode = NULL;
@@ -44,7 +44,7 @@ static int data_buffer_count = 0;
 
 int f_mount(char* sourcepath) {
   // open disk
-  strcpy(disk_img, sourcepath); 
+  strcpy(disk_img, sourcepath);
   cur_disk.diskfd = open(sourcepath, O_RDWR);
   if (cur_disk.diskfd == FAIL) {
     printf("Open disk image failed.\n");
@@ -92,7 +92,7 @@ int f_mount(char* sourcepath) {
   }
 
   //set up open file table
-  open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));  
+  open_ft = (struct file_table*)(malloc(sizeof(struct file_table)));
   open_ft->filenum = 0;
   open_ft->free_fd_num = MAX_OPENFILE;
   for(int i = 0; i < MAX_OPENFILE; i++) {
@@ -117,10 +117,10 @@ int f_mount(char* sourcepath) {
   printf("fd for root directory is %d\n", root_entry->fd);
   update_ft(root_entry, temp_index);
   /*
-    open_ft->free_id[temp_index] = UNDEFINED;
-    open_ft->free_fd_num --;
-    open_ft->entries[open_ft->filenum] = root_entry;
-    open_ft->filenum ++;
+  open_ft->free_id[temp_index] = UNDEFINED;
+  open_ft->free_fd_num --;
+  open_ft->entries[open_ft->filenum] = root_entry;
+  open_ft->filenum ++;
   */
   printf("data block offset for the first of root dir is %d\n", cur_disk.root_inode->dblocks[0]);
   int temp_offset = cur_disk.data_region_offset + cur_disk.root_inode->dblocks[0];
@@ -148,47 +148,137 @@ int f_open(char* filepath, char* access) {
     temp = parse_path[count];
   }
   return 0;
-} 
+}
 
 struct dirent* f_readdir(int dir_fd) {
-    struct file_table_entry* target = open_ft->entries[dir_fd];
-    if(target == NULL) {
-        printf("Invalid directory file descriptor for f_readdir\n");
-        return NULL;
-    }
-    if(target->block_offset == UNDEFINED) {
-        printf("Directory file is empty. No content to read for f_readdir\n");
-        return NULL;
-    }
-    printf("blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
-    int file_offset = cur_disk.data_region_offset + target->block_offset * 512 + target->offset;
-    printf("file offset readdir: %d\n", file_offset);
-    lseek(cur_disk.diskfd, file_offset, SEEK_SET);
-    struct dirent* ret = (struct dirent*)malloc(sizeof(struct dirent));
-    if(read(cur_disk.diskfd, ret, DIRENT_SIZE) != DIRENT_SIZE) {
-        printf("Read in dirent failed\n");
-        free(ret);
-        return NULL;
-    }
-    printf("file name for the ret is %s\n", ret->filename);
-    int new_offset = target->offset + DIRENT_SIZE;
-    if(new_offset >= BLOCKSIZE) {
-        struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * BLOCKSIZE);
-        target->block_index ++;
-        int new_blockindex = target->block_index;
-        printf("Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
-        if(new_blockindex < N_DBLOCKS) {
-            target->block_offset = temp_inode->dblocks[new_blockindex];
-        } else if (new_blockindex < LEVELONE) {
-            
+  struct file_table_entry* target = open_ft->entries[dir_fd-1];
+  if(target == NULL) {
+    printf("Invalid directory file descriptor for f_readdir\n");
+    return NULL;
+  }
+  if(target->block_offset == UNDEFINED) {
+    printf("Directory file is empty. No content to read for f_readdir\n");
+    return NULL;
+  }
+  // read in data
+  struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * BLOCKSIZE);
+  printf("blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
+  int file_offset = cur_disk.data_region_offset + target->block_offset * 512 + target->offset;
+  printf("file offset readdir: %d\n", file_offset);
+  if(file_offset > temp_inode->size) {
+    printf("End of file\n");
+    return NULL;
+  }
+  lseek(cur_disk.diskfd, file_offset, SEEK_SET);
+  struct dirent* ret = (struct dirent*)malloc(sizeof(struct dirent));
+  if(read(cur_disk.diskfd, ret, DIRENT_SIZE) != DIRENT_SIZE) {
+    printf("Read in dirent failed\n");
+    free(ret);
+    return NULL;
+  }
+  // update offset, block offset, block index
+  int new_offset = target->offset + DIRENT_SIZE;
+  if(new_offset >= BLOCKSIZE) {
+    int new_blockindex = target->block_index + 1;
+    printf("Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
+    // set up new block_index
+    if(new_blockindex < N_DBLOCKS) {
+      target->block_offset = temp_inode->dblocks[new_blockindex];
+    } else{
+      void* buffer = malloc(BLOCKSIZE);
+      // one level
+      if (new_blockindex < LEVELONE) {
+        int first_index = (new_blockindex - N_DBLOCKS)/TABLE_ENTRYNUM;
+        int second_index = (new_blockindex - N_DBLOCKS) - first_index * TABLE_ENTRYNUM;
+        printf("sum: %d, first index %d, second index %d\n", (new_blockindex - N_DBLOCKS), first_index, second_index);
+        int fileOffset = temp_inode->iblocks[first_index] * BLOCKSIZE + cur_disk.data_region_offset;
+        lseek(cur_disk.diskfd, fileOffset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read index data block failed in f_readdir level one\n");
+          free(buffer);
+          free(ret);
+          return NULL;
         }
-        target->offset = 0;
+        int* dblocks = (int*)buffer;
+        target->block_offset = dblocks[second_index];
+        printf("New block offset is %d\n", target->block_offset);
+        // two level
+      } else if (new_blockindex < LEVELTWO) {
+        int first_index = (new_blockindex - LEVELONE) / TABLE_ENTRYNUM;
+        int second_index = (new_blockindex - LEVELONE) - first_index * TABLE_ENTRYNUM;
+        int i2offset = temp_inode->i2block * BLOCKSIZE + cur_disk.data_region_offset;
+        // read in first block
+        lseek(cur_disk.diskfd, i2offset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read index data block failed in f_readdir level two\n");
+          free(buffer);
+          free(ret);
+          return NULL;
+        }
+        // read in the second index block
+        int* dblocks = (int*)buffer;
+        int sec_blockindex = dblocks[first_index];
+        int second_blockoffset = cur_disk.data_region_offset + sec_blockindex * BLOCKSIZE;
+        lseek(cur_disk.diskfd, second_blockoffset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read index data block failed in f_readdir level two\n");
+          free(buffer);
+          free(ret);
+          return NULL;
+        }
+        dblocks = (int*)buffer;
+        target->block_offset = dblocks[second_index];
+        printf("new block_offset is %d\n", target->block_offset);
+        // three level
+      } else if (new_blockindex < LEVELTHREE) {
+        int first_entry_size = TABLE_ENTRYNUM * TABLE_ENTRYNUM;
+        int first_index = (new_blockindex - LEVELTWO) / first_entry_size;
+        int second_index = ((new_blockindex - LEVELTWO) - first_index * first_entry_size) / TABLE_ENTRYNUM;
+        int third_index = (new_blockindex - LEVELTWO) - first_index * first_entry_size - second_index * TABLE_ENTRYNUM;
+        printf("three: first index %d, second %d, third %d\n", first_index, second_index, third_index);
 
-    } else {
-        target->offset = new_offset;
+        int i3offset = cur_disk.data_region_offset + temp_inode->i3block * BLOCKSIZE;
+        lseek(cur_disk.diskfd, i3offset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read first index data block failed in f_readdir level three\n");
+          free(buffer);
+          free(ret);
+          return NULL;
+        }
+        int* dblocks = (int*)buffer;
+        int block2_index = dblocks[first_index];
+        int block2_offset = cur_disk.data_region_offset + block2_index * BLOCKSIZE;
+        lseek(cur_disk.diskfd, block2_offset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read second index data block failed in f_readdir level two\n");
+          free(buffer);
+          free(ret);
+          return NULL;
+        }
+
+        dblocks = (int*)buffer;
+        int block3_index = dblocks[second_index];
+        int block3_offset = cur_disk.data_region_offset + block3_index * BLOCKSIZE;
+        lseek(cur_disk.diskfd, block3_offset, SEEK_SET);
+        if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+          printf("Read third index data block failed in f_readdir level two\n");
+          free(buffer);
+          free(ret);
+          return NULL;
+        }
+        dblocks = (int*)buffer;
+        target->block_offset = dblocks[third_index];
+        printf("new offset is %d\n", target->block_offset);
+      }
+      target->block_index ++;
+      target->offset = 0;
+      free(buffer);
     }
-
-    return ret;
+  } else {
+    target->offset = new_offset;
+  }
+  printf("file name for the ret is %s\n", ret->filename);
+  return ret;
 }
 
 static char** parse_filepath(char* filepath) {
@@ -230,48 +320,48 @@ static void update_ft(struct file_table_entry* new_entry, int new_index) {
 
 /*
 static struct dirent** get_dirents(int inode_index) {
-  struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * BLOCKSIZE);
-  if(target->nlink == 0) {
-    printf("Invalid inode! Inode is free!\n");
-    return NULL;
-  }
-  if(target->type != DIR) {
-    printf("Input file is not a directory! \n");
-    return NULL;
-  }
-  if(target->size == 0) {
-    printf("Directory does not contain any files\n");
-    return NULL;
-  }
-  int bytestoread = target->size;
-  int size = 5;
-  int dirent_num = size;
+struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * BLOCKSIZE);
+if(target->nlink == 0) {
+printf("Invalid inode! Inode is free!\n");
+return NULL;
+}
+if(target->type != DIR) {
+printf("Input file is not a directory! \n");
+return NULL;
+}
+if(target->size == 0) {
+printf("Directory does not contain any files\n");
+return NULL;
+}
+int bytestoread = target->size;
+int size = 5;
+int dirent_num = size;
 
-  struct dirent** res = (struct dirent**)malloc(sizeof(struct dirent*) * size);
-  void* buffer = malloc(BLOCKSIZE);
-  for(int i = 0; i < N_DBLOCKS; i++) {
-    if(bytestoread <= 0) {
-        free(buffer);
-        return res;
-    }
-    bzero(buffer, BLOCKSIZE);
-    int read_bytes = bytestoread < BLOCKSIZE ? bytestoread : BLOCKSIZE;
-    int block_index = target->dblocks[i];
-    lseek(cur_disk.diskfd, cur_disk.data_region_offset + block_index * BLOCKSIZE, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-        printf("read in data block in get dirents failed in dblocks\n");
-        free(buffer);
+struct dirent** res = (struct dirent**)malloc(sizeof(struct dirent*) * size);
+void* buffer = malloc(BLOCKSIZE);
+for(int i = 0; i < N_DBLOCKS; i++) {
+if(bytestoread <= 0) {
+free(buffer);
+return res;
+}
+bzero(buffer, BLOCKSIZE);
+int read_bytes = bytestoread < BLOCKSIZE ? bytestoread : BLOCKSIZE;
+int block_index = target->dblocks[i];
+lseek(cur_disk.diskfd, cur_disk.data_region_offset + block_index * BLOCKSIZE, SEEK_SET);
+if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+printf("read in data block in get dirents failed in dblocks\n");
+free(buffer);
 
-        return NULL;
-    }
-  }
-  
+return NULL;
+}
+}
+
 }
 */
 
 /*
-  1. parse
-  2. open
-  3. write
-  4. open
+1. parse
+2. open
+3. write
+4. open
 */

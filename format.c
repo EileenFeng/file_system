@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     struct inode reg_user;
     char bootbuffer[BLOCKSIZE];
 
-    // open output disk image for writing 
+    // open output disk image for writing
     output_disk = fopen("DISK", "wb+");
     if (output_disk == NULL) {
         printf("Create 'DISK' file failed.\n");
@@ -31,10 +31,10 @@ int main(int argc, char** argv) {
     sb.blocksize = BLOCKSIZE;
     sb.inode_offset = 0; // 16 inodes in total
     sb.data_offset = 9;
-    sb.free_inode_head = INODE_SETUP; // starts from the second inode, 
+    sb.free_inode_head = INODE_SETUP; // starts from the second inode,
                             // since the first one (with inode index 0) is always the root dir
     sb.free_block_head = 2; // starts from 0, used by root and home
-    
+
     int sb_size = sizeof(struct superblock);
     int padding_length = BLOCKSIZE - sb_size;
     char sb_padding[padding_length];
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     }
     root_inode.i2block = UNDEFINED;
     root_inode.i3block = UNDEFINED;
-    root_inode.last_block_index = 0;
+    root_inode.last_block_offset = 0;
     int inode_size = sizeof(struct inode);
     printf("root inode size is %d and root inodes %d\n", inode_size, sizeof(root_inode));
     if(fwrite(&root_inode, 1, sizeof(root_inode), output_disk) != inode_size) {
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     }
     home.i2block = UNDEFINED;
     home.i3block = UNDEFINED;
-    home.last_block_index = 1;
+    home.last_block_offset = 1;
     printf("home inode size is %d and root inodes %d\n", inode_size, sizeof(home));
     if(fwrite(&home, 1, sizeof(home), output_disk) != inode_size) {
         printf("Writing home directory inode failed\n");
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     }
     super_user.i2block = UNDEFINED;
     super_user.i3block = UNDEFINED;
-    super_user.last_block_index = UNDEFINED;
+    super_user.last_block_offset = UNDEFINED;
     printf("super_user inode size is %d and root inodes %d\n", inode_size, sizeof(super_user));
     if(fwrite(&super_user, 1, sizeof(super_user), output_disk) != inode_size) {
         printf("Writing super user directory inode failed\n");
@@ -147,13 +147,13 @@ int main(int argc, char** argv) {
     }
     reg_user.i2block = UNDEFINED;
     reg_user.i3block = UNDEFINED;
-    reg_user.last_block_index = UNDEFINED;
+    reg_user.last_block_offset = UNDEFINED;
     printf("reg_user inode size is %d and root inodes %d\n", inode_size, sizeof(reg_user));
     if(fwrite(&reg_user, 1, sizeof(reg_user), output_disk) != inode_size) {
         printf("Writing reg_user directory inode failed\n");
         return FAIL;
     }
-    
+
 
     // write the rest of inodes
     int inode_num = (sb.data_offset - sb.inode_offset) * BLOCKSIZE / sizeof(struct inode);
@@ -178,14 +178,13 @@ int main(int argc, char** argv) {
         }
         temp_free.i2block = UNDEFINED;
         temp_free.i3block = UNDEFINED;
-        temp_free.last_block_index = UNDEFINED;
+        temp_free.last_block_offset = UNDEFINED;
         if(fwrite(&temp_free, 1, sizeof(temp_free), output_disk) != sizeof(temp_free)) {
             printf("Write free inode %d failed\n", i);
             return FAIL;
         }
         printf("Finish writing free inode %d\n", i);
     }
-
     // write root block data block
     void* buffer = malloc(BLOCKSIZE);
     bzero(buffer, BLOCKSIZE);
@@ -214,7 +213,7 @@ int main(int argc, char** argv) {
         printf("write home dir data block failed\n");
     }
     free(buffer);
-    
+
     for (int i = 2; i < BLOCKNUM; i++) {
         struct free_block fb;
         printf("free block size is %d\n", sizeof(struct free_block));
@@ -230,7 +229,7 @@ int main(int argc, char** argv) {
 
     fclose(output_disk);
 
-    
+
     FILE* test = fopen("DISK", "rb");
     char boot[512];
     fread(boot, 1, 512, test);
@@ -247,9 +246,8 @@ int main(int argc, char** argv) {
     struct dirent* testf = (struct dirent*)(datablock + 512);
     printf("dirent testt %s\n", testf->filename);
     fclose(test);
-    
-    
+
+
     return SUCCESS;
 
 }
-
