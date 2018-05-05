@@ -21,6 +21,7 @@
 #define HOME_INDEX 1
 #define DEFAULT_PERM 755 //rwxr-xr-x
 #define TABLE_ENTRYNUM 128
+#define INODE_SIZE 96
 #define LEVELONE 520
 #define LEVELTWO 16904
 #define LEVELTHREE 2114056
