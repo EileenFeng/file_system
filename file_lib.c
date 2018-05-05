@@ -159,9 +159,14 @@ int f_opendir(char* filepath) {
   int count = 0;
   char* curdir = parse_path[count];
   struct dirent* root_entry = f_readdir(cur_disk.rootdir_fd);
-  while(curdir != NULL) {
-
+  while(root_entry != NULL) {
+    if(strcmp(curdir, root_entry->filename) != SUCCESS) {
+      printf("Directory not exists in root directory\n");
+      free_parse(parse_path);
+      return FAIL;
+    }
   }
+
 }
 
 
@@ -344,6 +349,17 @@ static char** parse_filepath(char* filepath) {
   }
   parse_result[count] = NULL;
   return parse_result;
+}
+
+static void free_parse(char** parse_result) {
+  int count = 0;
+  char* token = parse_result[count];
+  while(token != NULL) {
+    free(token);
+    count ++;
+    token = parse_result[count];
+  }
+  free(parse_result);
 }
 
 static void update_ft(struct file_table_entry* new_entry, int new_index) {
