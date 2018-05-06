@@ -306,7 +306,7 @@ struct dirent* f_readdir(int dir_fd) {
         printf("Readdir:  new offset is %d\n", target->block_offset);
       }
       target->block_index ++;
-      target->offset = 0;
+      target->offset = new_offset - BLOCKSIZE;
       free(buffer);
     }
   } else {
@@ -394,12 +394,33 @@ int f_open(char* filepath, char* access) {
   return 0;
 }
 
+
 int f_write(void* buffer, int bsize, int fd) {
   struct file_table_entry* writeto = open_ft->entries[fd];
+  struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
   if(writeto == NULL) {
     printf("fwrite: invalid fd\n");
     return FAIL;
   }
+  // if write within the same block
+  if(bsize + writeto->offset < BLOCKSIZE) {
+    if(write_inode->last_block_offset == writeto->block_offset) {
+      // might exceeds file size
+      int offset_inblock = write_inode->filesize % BLOCKSIZE;
+      if(bsize + writeto->offset > offset_inblock) {
+        write_inode->size += (bsize + writeto->offset - offset_inblock);
+      }
+    }
+    int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
+    lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+    if(write(cur_disk.diskfd, buffer, bsize) != bsize) {
+      printf("f_write: 1: write to data block failed\n");
+      return FAIL;
+    }
+    writeto->offset += bsize;
+    return bsize;
+  }
+
 }
 
 
@@ -567,6 +588,9 @@ static void write_newinode(struct inode* new_file_inode, int new_inode_index, in
   new_file_inode->i3block = UNDEFINED;
   new_file_inode->last_block_offset = UNDEFINED;
 }
+
+
+//static struct table* get_tables(struct file_table_entry* en)
 
 /*
 static struct dirent** get_dirents(int inode_index) {

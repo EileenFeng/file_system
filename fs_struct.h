@@ -28,6 +28,7 @@
 
 enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
+enum table_level{DIRECT, INDIRECT, I2, I3};
 
 /*
   1. inode index starting from 0
@@ -143,3 +144,10 @@ struct data_block{
   int block_index; // data block index relative to the data region
   char data[BLOCKSIZE];
 }data_block;
+
+struct table {
+  int table_level;
+  int* level_one;
+  int* level_two;
+  int* level_three;
+}table;
