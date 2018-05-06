@@ -214,6 +214,7 @@ int main(int argc, char** argv) {
     }
     free(buffer);
 
+    //writing the rest of blocks
     for (int i = 2; i < BLOCKNUM; i++) {
         struct free_block fb;
         printf("free block size is %d\n", sizeof(struct free_block));

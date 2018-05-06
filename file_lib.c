@@ -37,11 +37,17 @@ static struct file_table* open_ft;
 
 /********** HELPER FUNCTION PROTOTYPES **********/
 // helper functions
+/*** create or return an existing open file entry, target is relative child path ***/
 static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* target);
-static struct dirent* checkdir_exist(int parentdir_fd, char* targetdir);
+/***check whether the parent directory contains the file 'targetdir' ***/
+static struct dirent* checkdir_exist(int parentdir_fd, char*);
 static char** parse_filepath(char* filepath);
 static void update_ft(struct file_table_entry* new_entry, int new_index);
 static void free_parse(char**);
+/*** create a new reg or dir file, return the new file inode index ***/
+/*** 'newfile_name' is relative path ***/
+static int create_file(int parent_fd, char* newfile_name, int type);
+static void write_newinode(struct inode* new_file_inode, int new_inode_index, int parent_inode, int type);
 
 
 int f_mount(char* sourcepath) {
@@ -143,21 +149,6 @@ int f_mount(char* sourcepath) {
 }
 
 
-
-int f_open(char* filepath, char* access) {
-  char** parse_path = parse_filepath(filepath);
-  int count = 0;
-  char* temp = parse_path[count];
-  while(temp != NULL) {
-    printf("current file token is %s\n", temp);
-    count ++;
-    temp = parse_path[count];
-  }
-  return 0;
-}
-
-
-
 int f_opendir(char* filepath) {
   char** parse_path = parse_filepath(filepath);
   int count = 0;
@@ -173,8 +164,8 @@ int f_opendir(char* filepath) {
     printf("***opendir: curdir now is %s  and parent fd is %d\n", curdir, parent_fd);
     struct dirent* child_dirent = checkdir_exist(parent_fd, curdir);
     if(child_dirent == NULL) {
-      free_parse(parse_path);
       printf("opendir: Directory %s does not exists\n", curdir);
+      free_parse(parse_path);
       return FAIL;
     }
     if(child_dirent->type != DIR) {
@@ -194,8 +185,6 @@ int f_opendir(char* filepath) {
 }
 
 
-
-
 struct dirent* f_readdir(int dir_fd) {
   struct file_table_entry* target = open_ft->entries[dir_fd];
   if(target == NULL) {
@@ -209,9 +198,9 @@ struct dirent* f_readdir(int dir_fd) {
   // read in data
   struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * INODE_SIZE);
   printf("Readdir: blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
-  int file_offset = cur_disk.data_region_offset + target->block_offset * 512 + target->offset;
+  int file_offset = cur_disk.data_region_offset + target->block_offset * BLOCKSIZE + target->offset;
   printf("Readdir: file offset readdir: %d\n", file_offset);
-  if(file_offset > temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
+  if(file_offset >= temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
     printf("Readdir: End of file\n");
     return NULL;
   }
@@ -349,7 +338,72 @@ int f_rewind(int fd) {
 }
 
 
+int f_open(char* filepath, char* access) {
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* prevdir = NULL;
+  char* curdir = parse_path[count];
+  int parent_fd = cur_disk.rootdir_fd;
+  char parent_path[MAX_LENGTH];
+  strcpy(parent_path, "");
+  while(curdir != NULL) {
+    printf("current file token is %s\n", curdir);
+    // get complete path
+    if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
+      free_parse(parse_path);
+      printf("f_open: filepath invalid: file path too long\n");
+      return FAIL;
+    }
+    if(parent_fd != cur_disk.rootdir_fd){
+      strcat(parent_path, "/");
+    }
+    strcat(parent_path, curdir);
+    // check if parent directory exists
+    count ++;
+    printf("f_open: parent path for fopen is: %s\n", parent_path);
+    char* prevdir = curdir;
+    curdir = parse_path[count];
+    if(curdir == NULL){
+      break;
+    }
+    int parent_fd = f_opendir(parent_path);
+    if(parent_fd == FAIL) {
+      printf("f_open: Directory %s along the way does not exists\n", parent_path);
+      free_parse(parse_path);
+      return FAIL;
+    }
+  }
+  // now prevdir contains the file to be OPENED, parent dir is the parent Directory
+  printf("fopen: checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
+  if (target_file != NULL) {
+    if(target_file->type != REG) {
+      printf("fopen: file %s is not a regular file\n", prevdir);
+      free_parse(parse_path);
+      free(target_file);
+      return FAIL;
+    } else {
+      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir);
+      printf("fopen: return value fd is %d\n", openfile->fd);
+      return openfile->fd;
+    }
+  } else {
+    //createa file with create_file
+    // open with create_entry and return the fd
+  }
+  return 0;
+}
 
+int f_write(void* buffer, int bsize, int fd) {
+  struct file_table_entry* writeto = open_ft->entries[fd];
+  if(writeto == NULL) {
+    printf("fwrite: invalid fd\n");
+    return FAIL;
+  }
+}
+
+
+/*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
@@ -377,6 +431,8 @@ static char** parse_filepath(char* filepath) {
   return parse_result;
 }
 
+
+
 static void free_parse(char** parse_result) {
   int count = 0;
   char* token = parse_result[count];
@@ -388,6 +444,8 @@ static void free_parse(char** parse_result) {
   free(parse_result);
 }
 
+
+
 static void update_ft(struct file_table_entry* new_entry, int new_index) {
   open_ft->free_id[new_index] = UNDEFINED;
   open_ft->free_fd_num --;
@@ -395,18 +453,25 @@ static void update_ft(struct file_table_entry* new_entry, int new_index) {
   open_ft->filenum ++;
 }
 
-static struct dirent* checkdir_exist(int parentdir_fd, char* targetdir) {
-  struct dirent* temp = f_readdir(parentdir_fd);
-  printf("checkdir after readdir\n");
+
+
+static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
+  printf("========== checking %s exists\n", target);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
   printf("checkdir getting fd %d origin is  NULL? %d\n", parentdir_fd, origin==NULL);
   int org_offset = origin->offset;
   int org_block_index = origin->block_index;
   int org_block_offset = origin->block_offset;
-  printf("checkdir exists: parentdir fd is %d\n", parentdir_fd);
+
+  struct dirent* temp = f_readdir(parentdir_fd);
+  printf("checkdir exists: OOOOFset parentdir fd is %d origin offset is %d\n", parentdir_fd, origin->offset);
   while(temp != NULL) {
-    if(strcmp(temp->filename, targetdir) == SUCCESS) {
-      printf("**** In check, exists cur dirent filename %s, and target name %s\n", temp->filename, targetdir);
+    if(strcmp(temp->filename, target) == SUCCESS) {
+      printf("**** In check, exists cur dirent filename %s, and target name %s\n", temp->filename, target);
+      origin->offset = org_offset;
+      origin->block_index = org_block_index;
+      origin->block_offset = org_block_offset;
+      printf("+++++++++++++ checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
       return temp;
     }
     free(temp);
@@ -417,20 +482,35 @@ static struct dirent* checkdir_exist(int parentdir_fd, char* targetdir) {
   origin->offset = org_offset;
   origin->block_index = org_block_index;
   origin->block_offset = org_block_offset;
+  printf("+++++++++++++ checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
   return NULL;
 }
 
+
+
 static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* childpath){
   struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
-  struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
   printf("create entry chiled inode pased in is %d\n", child_inode);
   struct inode* result_inode = (struct inode*)(cur_disk.inodes + child_inode * INODE_SIZE);
   printf("create entry: inode index is %d and size is %d\n", result_inode->inode_index, result_inode->size);
-  strcpy(result->filepath, parent_entry->filepath);
+  char resultpath[MAX_LENGTH];
+  strcpy(resultpath, parent_entry->filepath);
   if(parent_fd != cur_disk.rootdir_fd){
-    strcat(result->filepath, "/");
+    strcat(resultpath, "/");
   }
-  strcat(result->filepath, childpath);
+  strcat(resultpath, childpath);
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    struct file_table_entry* temp = open_ft->entries[i];
+    if(temp == NULL) {
+      continue;
+    }
+    if(strcmp(temp->filepath, resultpath) == SUCCESS) {
+      printf("Create entry: file %s already OPENED!!!!\n", resultpath);
+      return temp;
+    }
+  }
+  struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
+  strcpy(result->filepath, resultpath);
   result->inode_index = child_inode;
   result->type = DIR;
   result->block_index = 0;
@@ -444,9 +524,49 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   update_ft(result, freefd_index);
   parent_entry->open_num ++;
   return result;
-
 }
 
+
+static int create_file(int parent_fd, char* newfile_name, int type){
+  printf("____________ creating file __________\n");
+  int new_inode_index = cur_disk.sb.free_inode_head;
+  printf("create file: new inode index is %d\n", new_inode_index);
+  if(new_inode_index == END) {
+    printf("create file: No more available inodes.\n");
+    return FAIL;
+  }
+
+  struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
+  if(parent_entry == NULL) {
+    printf("create file: invalid parent file descriptor. \n");
+    return FAIL;
+  }
+  struct inode* new_file_inode = (struct inode*)(cur_disk.inodes + new_inode_index * INODE_SIZE);
+  cur_disk.sb.free_inode_head = new_file_inode->next_free_inode;
+  write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
+  // need to write new entries into the parent directory file
+}
+
+static void write_newinode(struct inode* new_file_inode, int new_inode_index, int parent_inode, int type) {
+  new_file_inode->inode_index = new_inode_index;
+  new_file_inode->parent_inode = parent_inode;
+  new_file_inode->permissions = DEFAULT_PERM;
+  new_file_inode->type = type;
+  new_file_inode->next_free_inode = UNDEFINED;
+  new_file_inode->nlink = 1;
+  new_file_inode->size = 0;
+  new_file_inode->uid = cur_disk.uid;
+  new_file_inode->gid = UNDEFINED;
+  for(int i = 0; i < N_DBLOCKS; i++) {
+    new_file_inode->dblocks[i] = UNDEFINED;
+  }
+  for(int i = 0; i < N_IBLOCKS; i++) {
+    new_file_inode->iblocks[i] = UNDEFINED;
+  }
+  new_file_inode->i2block = UNDEFINED;
+  new_file_inode->i3block = UNDEFINED;
+  new_file_inode->last_block_offset = UNDEFINED;
+}
 
 /*
 static struct dirent** get_dirents(int inode_index) {
