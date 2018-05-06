@@ -48,9 +48,10 @@ static void free_parse(char**);
 /*** 'newfile_name' is relative path ***/
 static int create_file(int parent_fd, char* newfile_name, int type);
 static void write_newinode(struct inode* new_file_inode, int new_inode_index, int parent_inode, int type);
-static struct table* get_tables(struct file_table_entry* en);
-
-
+static struct table* get_tables(struct file_table_entry* en, struct table* t);
+static int get_next_boffset(struct table* t, struct file_table_entry* en);
+static void free_struct_table(struct table* t);
+static int get_next_freeOffset();
 /************************ LIB FUNCTIONS *****************************/
 
 int f_mount(char* sourcepath) {
@@ -400,33 +401,82 @@ int f_open(char* filepath, char* access) {
 
 
 int f_write(void* buffer, int bsize, int fd) {
-  struct file_table_entry* writeto = open_ft->entries[fd];
-  struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
-  if(writeto == NULL) {
-    printf("fwrite: invalid fd\n");
-    return FAIL;
-  }
-  // if write within the same block
-  if(bsize + writeto->offset < BLOCKSIZE) {
-    if(write_inode->last_block_offset == writeto->block_offset) {
-      // might exceeds file size
-      int offset_inblock = write_inode->size % BLOCKSIZE;
-      if(bsize + writeto->offset > offset_inblock) {
-        write_inode->size += (bsize + writeto->offset - offset_inblock);
-      }
+    struct file_table_entry* writeto = open_ft->entries[fd];
+    struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
+    if(writeto == NULL) {
+        printf("fwrite: invalid fd\n");
+        return FAIL;
     }
-    int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
-    lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
-    if(write(cur_disk.diskfd, buffer, bsize) != bsize) {
-      printf("f_write: 1: write to data block failed\n");
-      return FAIL;
+    struct table* datatable = (struct table*)malloc(sizeof(struct table));
+    datatable = get_tables(writeto, datatable);
+    int byte_to_write = bsize;
+    while(byte_to_write > 0) {
+        int fileOffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
+        lseek(cur_disk.diskfd, fileOffset, SEEK_SET);
+        if(byte_to_write >= BLOCKSIZE - writeto->offset) {
+            int cur_write_bytes = BLOCKSIZE - writeto->offset;
+            // need to fill up the current block, and then get the next block, update block_index, block_offset, offset = 0; and possible
+            // last_block_offset, and file size
+            //get next boffset 
+            //1. write the data into the current block
+            //2. call get_next_boffset, which will update datatable and entry, and inode when applciable
+            ////not need 3. update file entry's block_index ++, blockoffset to return valueof getnextboffset, and offset = 0
+
+            
+
+
+
+        } else {
+            printf("f_write:    final block to write.\n");
+            int cur_write_bytes = byte_to_write;
+            void* cur_buffer = buffer + (bsize - byte_to_write);
+            if(write(cur_disk.diskfd, cur_buffer, cur_write_bytes) != cur_write_bytes) {
+                printf("f_write:    2:   write data block failed\n");
+                free_struct_table(datatable);
+                return FAIL;
+            }
+            if(writeto->block_offset == write_inode->last_block_offset) {
+                int last_inblock_offset = write_inode->size % BLOCKSIZE;
+                if(writeto->offset + cur_write_bytes > last_inblock_offset) {
+                    write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
+                }
+            }
+            writeto->offset += byte_to_write;
+            byte_to_write -= cur_write_bytes;
+        }
     }
-    writeto->offset += bsize;
-    return bsize;
-  } else {
+
+        /* handled below
+    // if write within the same block
+    if(bsize + writeto->offset < BLOCKSIZE) {
+        if(write_inode->last_block_offset == writeto->block_offset) {
+        // might exceeds file size
+        int offset_inblock = write_inode->size % BLOCKSIZE;
+        if(bsize + writeto->offset > offset_inblock) {
+            write_inode->size += (bsize + writeto->offset - offset_inblock);
+        }
+        }
+        int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
+        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+        if(write(cur_disk.diskfd, buffer, bsize) != bsize) {
+        printf("f_write: 1: write to data block failed\n");
+        return FAIL;
+        }
+        writeto->offset += bsize;
+        return bsize;
+
+
+        
+    } else {
+    */
+    /*
+    int total_blocknum = write_inode->size % BLOCKSIZE == 0? write_inode->size / BLOCKSIZE : write_inode->size / BLOCKSIZE + 1;
+
     struct table* datatable = get_tables(writeto);
-    int add_block_num = ((datatable->inblock_offset + bsize - BLOCKSIZE) % BLOCKSIZE) == 0 ? (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE ; (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE + 1;
+    int add_block_num = ((datatable->inblock_offset + bsize - BLOCKSIZE) % BLOCKSIZE) == 0 ? (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE : (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE + 1;
     printf("f_write: needs to write %d more data blocks.\n", add_block_num);
+
+    
 
     if(datatable->intable_index + add_block_num < TABLE_ENTRYNUM) {
       // need not to add new data tables
@@ -435,6 +485,11 @@ int f_write(void* buffer, int bsize, int fd) {
     }
     // now write blocks
   }
+    */
+
+
+
+
 
 }
 
@@ -605,9 +660,9 @@ static void write_newinode(struct inode* new_file_inode, int new_inode_index, in
 }
 
 
-static struct table* get_tables(struct file_table_entry* en) {
+static struct table* get_tables(struct file_table_entry* en, struct table* t) {
     int block_index = en->block_index;
-    struct table* t = (struct table*)malloc(sizeof(struct table));
+    //struct table* t = (struct table*)malloc(sizeof(struct table));
     struct inode* node = (struct inode*)(cur_disk.inodes + en->inode_index * INODE_SIZE);
     int inblock_offset = node->size % BLOCKSIZE;
     t->inblock_offset = inblock_offset;
@@ -615,9 +670,14 @@ static struct table* get_tables(struct file_table_entry* en) {
     if(block_index < N_DBLOCKS) {
         t->table_level = DIRECT;
         t->level_one = node->dblocks;
+        t->cur_data_table = node->dblocks;
+        t->level_one_index = block_index;
         t->level_two = NULL;
+        t->level_two_index = UNDEFINED;
         t->level_three = NULL;
+        t->level_three_index = UNDEFINED;
         t->intable_index = block_index;
+        t->cur_table_size = N_DBLOCKS;
         return t;
     }
 
@@ -638,9 +698,14 @@ static struct table* get_tables(struct file_table_entry* en) {
         }
         t->table_level = I1;
         t->level_one = node->iblocks;
+        t->level_one_index = first_index;
         t->level_two = datablocks;
+        t->cur_data_table = datablocks;
+        t->level_two_index = second_index;
         t->level_three = NULL;
+        t->level_three_index = UNDEFINED;
         t->intable_index = second_index;
+        t->cur_table_size = TABLE_ENTRYNUM;
         return t;
     }
 
@@ -672,9 +737,14 @@ static struct table* get_tables(struct file_table_entry* en) {
         }
         t->table_level = I2;
         t->level_one = first_table;
+        t->level_one_index = first_index;
         t->level_two = second_table;
+        t->level_two_index = second_index;
+        t->cur_data_table = second_table;
         t->level_three = NULL;
+        t->level_three_index = UNDEFINED;
         t->intable_index = second_index;
+        t->cur_table_size = TABLE_ENTRYNUM;
         return t;
     }
 
@@ -718,14 +788,363 @@ static struct table* get_tables(struct file_table_entry* en) {
 
         t->table_level = I3;
         t->level_one = first_table;
+        t->level_one_index = first_index;
         t->level_two = second_table;
+        t->level_two_index = second_index;
         t->level_three = third_table;
+        t->level_three_index = third_index;
         t->intable_index = third_index;
+        t->cur_data_table = third_table;
+        t->cur_table_size = TABLE_ENTRYNUM;
         return t;
     }
     return NULL;
 }
 
+// get the next block offset (used or new block)
+
+// if getting to a new level, cannot memcpy, needs to malloc new buffer 
+static int get_next_boffset(struct table* t, struct file_table_entry* en) {
+    struct inode* node = (struct inode*)(cur_disk.inodes + en->inode_index * INODE_SIZE);
+    if(t->cur_data_table[t->intable_index] == node->last_block_offset) {
+        // needs to assign new blocks
+        if(t->intable_index + 1 < t->cur_table_size) {
+            int new_datablock_offset = get_next_freeOffset();
+            if(new_datablock_offset == FAIL) {
+                printf("Get next boffset:   1:      get next free block for data failed\n");
+                return FAIL;
+            }
+            en->block_index ++;
+            en->block_offset = new_datablock_offset;
+            en->offset = 0;
+
+            t->intable_index ++;
+            // need to write this back to disk
+            t->cur_data_table[t->intable_index] = new_datablock_offset;
+            int tableoffset = UNDEFINED;
+            if(t->table_level == I1) {
+                tableoffset = t->level_one_index;
+            } else if (t->table_level == I2) {
+                tableoffset = t->level_one_index;
+            } else if(t->table_level == I3) {
+                tableoffset = t->level_two_index;
+            }
+            // write the table data for the table back to disk
+            int table_fileOffset = cur_disk.data_region_offset + tableoffset * BLOCKSIZE;
+            lseek(cur_disk.diskfd, table_fileOffset, SEEK_SET);
+            if(write(cur_disk.diskfd, t->cur_data_table, BLOCKSIZE) != BLOCKSIZE) {
+                printf("get_next_offset:    2:  update index table failed\n");
+                return FAIL;
+            }
+            //update inode and write back to disk
+            node->last_block_offset = new_datablock_offset;
+            if(t->table_level == DIRECT) {
+                node->dblocks[t->intable_index] = new_datablock_offset;
+            }
+
+            return new_datablock_offset;
+        } else {
+            //need to create new data tables
+            if(t->table_level == DIRECT) {
+                int new_table_offset = get_next_freeOffset();
+                if(new_table_offset == FAIL) {
+                    printf("Get next boffset:   get next free block for table failed\n");
+                    return FAIL;
+                }
+                // update inode
+                node->iblocks[0] = new_table_offset;
+
+                int* new_table = (int*)malloc(BLOCKSIZE);
+                int new_data_offset = get_next_freeOffset();
+                if(new_data_offset == FAIL) {
+                    free(new_table);
+                    printf("Get next boffset:   get next free block for data failed\n");
+                    return FAIL;
+                }
+                new_table[0] = new_data_offset;
+                // write new offset table
+                int newtable_offset = cur_disk.data_region_offset + new_table_offset * BLOCKSIZE;
+                lseek(cur_disk.diskfd, newtable_offset, SEEK_SET);
+                if(write(cur_disk.diskfd, (void*)new_table, BLOCKSIZE) != BLOCKSIZE) {
+                    free(new_table);
+                    printf("Get next boffset:   1:  write new table block failed\n");
+                    return FAIL;
+                }
+                // update entry
+                en->block_index ++;
+                en->block_offset = new_data_offset;
+                en->offset = 0;
+                // update table:
+                t->table_level = I1;
+                t->inblock_offset = 0;
+                t->intable_index = 0;
+                t->cur_table_size = TABLE_ENTRYNUM;
+                t->level_one = node->iblocks;
+                t->level_one_index = 0;
+                //memcpy(t->level_two, new_table, BLOCKSIZE);
+                t->level_two = new_table;
+                t->level_two_index = 0;
+                t->level_three = NULL;
+                t->level_three_index = UNDEFINED;
+                t->cur_data_table = t->level_two;
+                
+                return new_data_offset;
+            }
+            
+            int new_i2 = FALSE;
+            if(t->table_level == I1) {
+                if(t->level_one_index == N_IBLOCKS - 1 && t->level_two_index == TABLE_ENTRYNUM - 1) {
+                    t->table_level = I2;
+                    new_i2 = TRUE;
+                } else {
+                    int new_table_offset = get_next_freeOffset();
+                    if(new_table_offset < 0) {
+                        printf("get next boffset:   3:  i2 get new table offset failed\n");
+                        return FAIL;
+                    }
+
+                    t->level_one_index ++;
+                    t->level_one[t->level_one_index] = new_table_offset;
+                    int new_data_offset = get_next_freeOffset();
+                    if(new_data_offset < 0) {
+                        printf("get next boffset:   4:  i2 get new data offset failed\n");
+                        return FAIL;
+                    }
+
+                    int* new_table = (int*)malloc(BLOCKSIZE);
+                    new_table[0] = new_data_offset;
+                    int fileoffset = cur_disk.data_region_offset + new_table_offset * BLOCKSIZE;
+                    lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+                    if(write(cur_disk.diskfd, new_table, BLOCKSIZE) != BLOCKSIZE) {
+                        free(new_table);
+                        printf("Get next boffset:   2:  write new table block failed\n");
+                        return FAIL;
+                    }
+
+                    // update table:
+                    t->table_level = I1;
+                    t->inblock_offset = 0;
+                    t->intable_index = 0;
+                    t->cur_table_size = TABLE_ENTRYNUM;
+                    //t->level_one = node->iblocks;
+                    //t->level_one_index = 0;
+                    memcpy(t->level_two, new_table, BLOCKSIZE);
+                    t->level_two_index = 0;
+                    t->level_three = NULL;
+                    t->level_three_index = UNDEFINED;
+                    t->cur_data_table = t->level_two;
+                    // update entry
+                    en->block_index ++;
+                    en->offset = 0;
+                    en->block_offset = new_data_offset;
+                    free(new_table);
+                    return new_data_offset;
+                }
+            }
+
+            int new_i3 = FALSE;
+            if(t->table_level == I2) {
+                if(t->level_one_index == (TABLE_ENTRYNUM - 1) && t->level_two_index == (TABLE_ENTRYNUM - 1)) {
+                    new_i3 = TRUE;
+                } else {
+                    if(new_i2) {
+                        int i2 = get_next_freeOffset();
+                        if(i2 < 0) {
+                            printf("Get next boffset:   5 I2:  write new table block failed\n");
+                            return FAIL;
+                        }
+                        // update inode
+                        node->i2block = i2;
+                        int i2block_offset = get_next_freeOffset();
+                        int i2data_offset = get_next_freeOffset(); // return value
+                        if(i2block_offset < 0 || i2data_offset < 0 ) {
+                            printf("Get next boffset:   6 I2:  write new table block failed\n");
+                            return FAIL;
+                        }
+                        // write first level
+                        //void* buffer = malloc(BLOCKSIZE);
+                        int* level1 = (int*)malloc(BLOCKSIZE);
+                        level1[0] = i2block_offset;
+                        int fileoffset = cur_disk.data_region_offset + i2 * BLOCKSIZE;
+                        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+                        if(write(cur_disk.diskfd, level1, BLOCKSIZE) != BLOCKSIZE) {
+                            free(level1);
+                            printf("Get next boffset:   1 I2:  write new table block failed\n");
+                            return FAIL;
+                        }
+                        //memcpy(t->level_one, buffer, BLOCKSIZE);
+                        t->level_one = level1;
+                        t->level_one_index = 0;
+
+                        // write second level
+                        
+                        int* level2 = (int*)malloc(BLOCKSIZE);
+                        level2[0] = i2data_offset;
+                        fileoffset = cur_disk.data_region_offset + i2block_offset * BLOCKSIZE;
+                        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+                        if(write(cur_disk.diskfd, level2, BLOCKSIZE) != BLOCKSIZE) {
+                            free(level2);
+                            printf("Get next boffset:   2 I2:  write new table block failed\n");
+                            return FAIL;
+                        }
+                        //memcpy(t->level_two, level2, BLOCKSIZE);
+                        t->level_two = level2;
+                        t->level_two_index = 0;
+                        t->level_three = NULL;
+                        t->level_three_index = UNDEFINED;
+                        // update rest of table:
+                        t->inblock_offset = 0;
+                        t->intable_index = 0;
+                        t->cur_table_size = TABLE_ENTRYNUM;
+                        t->cur_data_table = t->level_two;
+                        // update entry:
+                        en->block_index++;
+                        en->block_offset = i2data_offset;
+                        en->offset = 0;
+                        return i2data_offset;
+                    } else {
+                        int i2block_offset = get_next_freeOffset();
+                        int i2data_offset = get_next_freeOffset(); // return value
+                        if(i2block_offset < 0 || i2data_offset < 0 ) {
+                            printf("Get next boffset:   6 I2:  write new table block failed\n");
+                            return FAIL;
+                        }
+                        t->level_one_index ++;
+                        t->level_one[t->level_one_index] = i2block_offset;
+                        // write the level_one back to disk
+                        int fileoffset = cur_disk.data_region_offset + node->i2block * BLOCKSIZE;
+                        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+                        if(write(cur_disk.diskfd, t->level_one, BLOCKSIZE) != BLOCKSIZE) {
+                            printf("get_next_offset:    I2:  1:     update level one index table failed\n");
+                            return FAIL;
+                        }
+
+                        int* level2 = (int*)malloc(BLOCKSIZE);
+                        level2[0] = i2data_offset;
+                        fileoffset = cur_disk.data_region_offset + i2block_offset * BLOCKSIZE;
+                        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+                        if(write(cur_disk.diskfd, level2, BLOCKSIZE) != BLOCKSIZE) {
+                            printf("get_next_offset:    I2:  1:     update level one index table failed\n");
+                            return FAIL;
+                        }
+
+                        //update table:
+                        t->inblock_offset = 0;
+                        t->intable_index = 0;
+                        t->cur_table_size = TABLE_ENTRYNUM;
+                        t->cur_data_table = t->level_two;
+                        memcpy(t->level_two, level2, BLOCKSIZE);
+                        t->level_two_index = 0;
+                        t->level_three = NULL;
+                        t->level_three_index = UNDEFINED;
+                        //update entry:
+                        en->block_index ++;
+                        en->offset = 0;
+                        en->block_offset = i2data_offset;
+                        free(level2);
+                        return i2data_offset;
+                    }
+                }
+
+
+
+
+            }
+
+            
+
+        }
+
+    } else {
+        // find the file's inner(not new) next block
+        int new_index = t->intable_index + 1;
+        if(new_index < t->cur_table_size) {
+            t->intable_index = new_index;
+            return t->cur_data_table[new_index];
+        } else {
+            en->block_index ++;
+            t = get_tables(en, t);
+            en->block_offset = t->cur_data_table[t->intable_index];
+            en->offset = 0;
+            return t->cur_data_table[t->intable_index];
+        }
+    }
+
+
+
+    /*
+    int new_index = t->intable_index + 1;
+    if(new_index < t->cur_table_size) {
+        if(t->table_level == DIRECT) {
+            return t->level_one[new_index];
+        }
+        if(t->table_level == I1) {
+            return t->level_two[new_index];
+        } 
+        if(t->table_level == I2) {
+            return t->level_two[new_index];
+        }
+        if(t->table_level == I3) {
+            return t->level_three[new_index];
+        }
+    } else {
+        //need new data blocks
+        if(t->table_level == DIRECT) {
+            // assign new table for iblocks[0]
+            int new_table_offset = get_next_freeOffset();
+            if(new_table_offset == FAIL) {
+                printf("Get next boffset:   get next free block for table failed\n");
+                return FAIL;
+            }
+            node->iblocks[0] = new_table_offset;
+
+            int* new_table = (int*)malloc(BLOCKSIZE);
+            int new_data_offset = get_next_freeOffset();
+            if(new_data_offset == FAIL) {
+                printf("Get next boffset:   get next free block for data failed\n");
+                return FAIL;
+            }
+
+
+        }
+        if(t->table_level == I1) {
+            return t->level_two[new_index];
+        } 
+        if(t->table_level == I2) {
+            return t->level_two[new_index];
+        }
+        if(t->table_level == I3) {
+            return t->level_three[new_index];
+        }
+    }
+    */
+}
+
+static void free_struct_table(struct table* t) {
+    free(t->level_one);
+    free(t->level_two);
+    free(t->level_three);
+    free(t);
+}
+
+static int get_next_freeOffset() {
+    int ret = cur_disk.sb.free_block_head;
+    if(ret < 0) {
+        return FAIL;
+    }
+    int freeOffset = cur_disk.data_region_offset + ret * BLOCKSIZE;
+    lseek(cur_disk.diskfd, freeOffset, SEEK_SET);
+    void* buffer = malloc(BLOCKSIZE);
+    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+        printf("getnextfree:    get next free Offset failed. \n");
+        free(buffer);
+        return FAIL;
+    }
+    struct free_block* oldhead = (struct free_block*)buffer;
+    printf("getnextfree:    ret value is %d     and new head %d\n", ret, oldhead->next_free);
+    cur_disk.sb.free_block_head = oldhead->next_free;
+    return ret;
+}
 /*
 static struct dirent** get_dirents(int inode_index) {
 struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * BLOCKSIZE);

@@ -149,7 +149,19 @@ struct table {
   int table_level;
   int inblock_offset;
   int intable_index; // position of the current block: index to the data block in data table, not the data block offset
+  int cur_table_size;
+  int* cur_data_table;
   int* level_one;
+  int level_one_index; // index of table level_one to obtain level_two table 
   int* level_two;
+  int level_two_index;
   int* level_three;
+  int level_three_index;
 }table;
+
+/*
+    direct: data: level one
+    indirect: data: level two
+    i2: data: level two
+    i3: data: level three
+*/
