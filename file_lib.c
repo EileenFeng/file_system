@@ -48,7 +48,10 @@ static void free_parse(char**);
 /*** 'newfile_name' is relative path ***/
 static int create_file(int parent_fd, char* newfile_name, int type);
 static void write_newinode(struct inode* new_file_inode, int new_inode_index, int parent_inode, int type);
+static struct table* get_tables(struct file_table_entry* en);
 
+
+/************************ LIB FUNCTIONS *****************************/
 
 int f_mount(char* sourcepath) {
   // open disk
@@ -216,6 +219,7 @@ struct dirent* f_readdir(int dir_fd) {
   if(new_offset >= BLOCKSIZE) {
     int new_blockindex = target->block_index + 1;
     printf("Readdir: Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
+    
     // set up new block_index
     if(new_blockindex < N_DBLOCKS) {
       target->block_offset = temp_inode->dblocks[new_blockindex];
@@ -406,7 +410,7 @@ int f_write(void* buffer, int bsize, int fd) {
   if(bsize + writeto->offset < BLOCKSIZE) {
     if(write_inode->last_block_offset == writeto->block_offset) {
       // might exceeds file size
-      int offset_inblock = write_inode->filesize % BLOCKSIZE;
+      int offset_inblock = write_inode->size % BLOCKSIZE;
       if(bsize + writeto->offset > offset_inblock) {
         write_inode->size += (bsize + writeto->offset - offset_inblock);
       }
@@ -419,6 +423,9 @@ int f_write(void* buffer, int bsize, int fd) {
     }
     writeto->offset += bsize;
     return bsize;
+  } else {
+    struct table* datatable = get_tables(writeto);
+    // now write blocks
   }
 
 }
@@ -590,7 +597,126 @@ static void write_newinode(struct inode* new_file_inode, int new_inode_index, in
 }
 
 
-//static struct table* get_tables(struct file_table_entry* en)
+static struct table* get_tables(struct file_table_entry* en) {
+    int block_index = en->block_index;
+    struct table* t = (struct table*)malloc(sizeof(struct table));
+    struct inode* node = (struct inode*)(cur_disk.inodes + en->inode_index * INODE_SIZE);
+    int inblock_offset = node->size % BLOCKSIZE;
+    t->inblock_offset = inblock_offset;
+    // level direct:
+    if(block_index < N_DBLOCKS) {
+        t->table_level = DIRECT;
+        t->level_one = node->dblocks;
+        t->level_two = NULL;
+        t->level_three = NULL;
+        t->intable_index = block_index;
+        return t;
+    }
+
+    // level one:
+    if(block_index < LEVELONE) {
+        int first_index = (block_index - N_DBLOCKS) / TABLE_ENTRYNUM;
+        int second_index = (block_index - N_DBLOCKS) - first_index * TABLE_ENTRYNUM;
+        
+        int first_offset = node->iblocks[first_index];
+        int first_foffset = cur_disk.data_region_offset + first_offset * BLOCKSIZE;
+        int* datablocks = (int*)malloc(BLOCKSIZE);
+        lseek(cur_disk.diskfd, first_foffset, SEEK_SET);
+        if(read(cur_disk.diskfd, (void*)datablocks, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 1   read in dblock failed\n");
+            free(datablocks);
+            free(t);
+            return NULL;
+        }
+        t->table_level = I1;
+        t->level_one = node->iblocks;
+        t->level_two = datablocks;
+        t->level_three = NULL;
+        t->intable_index = second_index;
+        return t;
+    }
+
+    // level two
+    if(block_index < LEVELTWO) {
+        int first_index = (block_index - LEVELONE) / TABLE_ENTRYNUM;
+        int second_index = (block_index - LEVELONE) - first_index * TABLE_ENTRYNUM;
+        int i2offset = node->i2block * BLOCKSIZE + cur_disk.data_region_offset;
+
+        // read in level one table
+        int* first_table = (int*)malloc(BLOCKSIZE);
+        lseek(cur_disk.diskfd, i2offset, SEEK_SET);
+        if(read(cur_disk.diskfd, (void*)first_table, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 2   read in first table failed\n");
+            free(first_table);
+            free(t);
+            return NULL;
+        }
+
+        // read in level two table
+        int secondt_offset = cur_disk.data_region_offset + first_table[first_index] * BLOCKSIZE;
+        int* second_table = (int*)malloc(BLOCKSIZE);
+        lseek(cur_disk.diskfd, secondt_offset, SEEK_SET);
+        if(read(cur_disk.diskfd, (void*)second_table, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 2   read in dblock failed\n");
+            free(second_table);
+            free(t);
+            return NULL;
+        }
+        t->table_level = I2;
+        t->level_one = first_table;
+        t->level_two = second_table;
+        t->level_three = NULL;
+        t->intable_index = second_index;
+        return t;
+    }
+
+    if(block_index < LEVELTHREE) {
+        int firstlevel_size = TABLE_ENTRYNUM * TABLE_ENTRYNUM;
+        int first_index = (block_index - LEVELTWO) / firstlevel_size;
+        int second_index = ((block_index - LEVELTWO) - first_index * firstlevel_size)  / TABLE_ENTRYNUM;
+        int third_index = (block_index - LEVELTWO) - first_index * firstlevel_size - second_index * TABLE_ENTRYNUM;
+        
+        int i3offset = cur_disk.data_region_offset + node->i3block * BLOCKSIZE;
+        lseek(cur_disk.diskfd, i3offset, SEEK_SET);
+        // read in level one table
+        int* first_table = (int*)malloc(BLOCKSIZE);
+        if(read(cur_disk.diskfd, (void*)first_table, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 3   read in first table failed\n");
+            free(first_table);
+            free(t);
+            return NULL;
+        }
+
+        // read in level two table
+        int second_foffset = cur_disk.data_region_offset + first_table[first_index];
+        lseek(cur_disk.diskfd, second_foffset, SEEK_SET);
+        int* second_table = (int*)malloc(BLOCKSIZE);
+        if(read(cur_disk.diskfd, (void*)second_table, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 3   read in 2nd table failed\n");
+            free(second_table);
+            free(t);
+            return NULL;
+        }
+
+        int third_foffset = cur_disk.data_region_offset + second_table[second_index] * BLOCKSIZE;
+        lseek(cur_disk.diskfd, third_foffset, SEEK_SET);
+        int* third_table = (int*)malloc(BLOCKSIZE);
+        if(read(cur_disk.diskfd, (void*)third_table, BLOCKSIZE) != BLOCKSIZE) {
+            printf("get_tables:     level 3   read in 3rd table failed\n");
+            free(third_table);
+            free(t);
+            return NULL;
+        }   
+
+        t->table_level = I3;
+        t->level_one = first_table;
+        t->level_two = second_table;
+        t->level_three = third_table;
+        t->intable_index = third_index;
+        return t;
+    }
+    return NULL;
+}
 
 /*
 static struct dirent** get_dirents(int inode_index) {

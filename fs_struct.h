@@ -28,7 +28,7 @@
 
 enum fileseek {SSET, SCUR, SEND};
 enum file_type{DIR, REG};
-enum table_level{DIRECT, INDIRECT, I2, I3};
+enum table_level{DIRECT, I1, I2, I3};
 
 /*
   1. inode index starting from 0
@@ -147,6 +147,8 @@ struct data_block{
 
 struct table {
   int table_level;
+  int inblock_offset;
+  int intable_index; // position of the current block: index to the data block in data table, not the data block offset
   int* level_one;
   int* level_two;
   int* level_three;
