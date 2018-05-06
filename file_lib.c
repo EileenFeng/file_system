@@ -425,6 +425,14 @@ int f_write(void* buffer, int bsize, int fd) {
     return bsize;
   } else {
     struct table* datatable = get_tables(writeto);
+    int add_block_num = ((datatable->inblock_offset + bsize - BLOCKSIZE) % BLOCKSIZE) == 0 ? (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE ; (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE + 1;
+    printf("f_write: needs to write %d more data blocks.\n", add_block_num);
+
+    if(datatable->intable_index + add_block_num < TABLE_ENTRYNUM) {
+      // need not to add new data tables
+    } else {
+      // need to add data blocks
+    }
     // now write blocks
   }
 
