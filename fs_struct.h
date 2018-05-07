@@ -28,7 +28,7 @@
 
 enum fileseek {SEEKSET, SEEKCUR, SEEKEND};
 enum file_type{DIR, REG};
-enum table_level{DIRECT, I1, I2, I3};
+enum table_level{NONE, DIRECT, I1, I2, I3};
 
 /*
 1. inode index starting from 0

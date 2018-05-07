@@ -22,9 +22,10 @@ int main() {
   int new_fd = f_open("home/rusr/haha.txt", "");
   printf("_______end of fopen______________\n");
   printf("new file fd is %d\n", new_fd);
-  //printf("\n\n_______________________read new file dir\n\n");
-  //struct dirent* rusrdir = f_readdir(result);
-  //printf("should be haha.txt: %s\n", rusrdir->filename);
+  printf("\n\n_______________________read new file dir\n\n");
+
+  struct dirent* rusrdir = f_readdir(result);
+  printf("should: %s\n", rusrdir->filename);
   //f_open("/home/eileen/haha/lol.txt", "dajs");
 
 }

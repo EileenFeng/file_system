@@ -205,6 +205,7 @@ struct dirent* f_readdir(int dir_fd) {
   printf("Readdir: blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
   int file_offset = cur_disk.data_region_offset + target->block_offset * BLOCKSIZE + target->offset;
   printf("Readdir: file offset readdir: %d\n", file_offset);
+  printf("Readdir: file size is %d\n", temp_inode->size);
   if(file_offset >= temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
     printf("Readdir: End of file\n");
     return NULL;
@@ -346,6 +347,11 @@ int f_seek(int fd, int offset, int whence) {
       }
       struct table* datatable = (struct table*)malloc(sizeof(struct table));
       get_tables(entry, datatable);
+      if(datatable->table_level == NONE) {
+        free_struct_table(datatable);
+        printf("fseek:  file is empty\n");
+        return SUCCESS;
+      }
       entry->block_offset = datatable->cur_data_table[datatable->intable_index];
       free_struct_table(datatable);
       return SUCCESS;
@@ -365,6 +371,11 @@ int f_seek(int fd, int offset, int whence) {
         entry->offset = moreoffset % BLOCKSIZE;
         struct table* datatable = (struct table*)malloc(sizeof(struct table));
         get_tables(entry, datatable);
+        if(datatable->table_level == NONE) {
+          free_struct_table(datatable);
+          printf("fseek:  file is empty\n");
+          return SUCCESS;
+        }
         entry->block_offset = datatable->cur_data_table[datatable->intable_index];
         free_struct_table(datatable);
         return SUCCESS;
@@ -372,17 +383,28 @@ int f_seek(int fd, int offset, int whence) {
 
     }
   }else if(whence == SEEKEND) {
+    printf("s1\n");
     if(offset > cur_inode->size) {
       printf("fseek:    Invalid offset! Seek backwards outside of file range\n");
       return FAIL;
     } else {
+      printf("s2\n");
       int pos = cur_inode->size - offset;
       entry->block_index = pos / BLOCKSIZE;
       entry->offset = pos % BLOCKSIZE;
       struct table* datatable = (struct table*)malloc(sizeof(struct table));
+      printf("s3\n");
       get_tables(entry, datatable);
+      printf("s4\n");
+      if(datatable->table_level == NONE) {
+        free_struct_table(datatable);
+        printf("fseek:  file is empty\n");
+        return SUCCESS;
+      }
       entry->block_offset = datatable->cur_data_table[datatable->intable_index];
+      printf("s5\n");
       free_struct_table(datatable);
+      printf("s6\n");
       return SUCCESS;
     }
   } else {
@@ -441,17 +463,17 @@ int f_open(char* filepath, char* access) {
     if(curdir == NULL){
       break;
     }
-    int parent_fd = f_opendir(parent_path);
+    parent_fd = f_opendir(parent_path);
     if(parent_fd == FAIL) {
       printf("f_open: Directory %s along the way does not exists\n", parent_path);
       free_parse(parse_path);
       return FAIL;
     }
-    printf("fopen:   ##### parent_fd is %d\n", parent_fd);
+    printf("f_open:   ##### parent_fd is %d\n", parent_fd);
   }
-  printf("fopen:  )))))))))))))))))))) 3\n");
+  printf("f_open:  )))))))))))))))))))) 3  parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
-  printf("fopen: checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  printf("f_open: checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
   if (target_file != NULL) {
     if(target_file->type != REG) {
@@ -481,9 +503,10 @@ int f_write(void* buffer, int bsize, int fd) {
   struct file_table_entry* writeto = open_ft->entries[fd];
   struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
   if(writeto == NULL) {
-    printf("fwrite: invalid fd\n");
+    printf("f_write: invalid fd\n");
     return FAIL;
   }
+  printf("f_write:     first:  fd is %d cur data block index %d offset %d\n", fd, writeto->block_index, writeto->offset);
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   datatable = get_tables(writeto, datatable);
   int byte_to_write = bsize;
@@ -507,9 +530,30 @@ int f_write(void* buffer, int bsize, int fd) {
       //2. call get_next_boffset, which will update datatable and entry, and inode when applciable
       ////not need 3. update file entry's block_index ++, blockoffset to return valueof getnextboffset, and offset = 0
     } else {
+      if(write_inode->dblocks[0] == UNDEFINED) {
+        int first_data_blockoffset = get_next_freeOffset();
+        if(first_data_blockoffset == FAIL) {
+          printf("f_write:   empty:      get next free block for data failed\n");
+          return FAIL;
+        }
+        printf("fwrite:   gettting a new block?\n");
+        write_inode->dblocks[0] = first_data_blockoffset;
+        writeto->block_index = 0;
+        writeto->block_offset = first_data_blockoffset;
+        write_inode->last_block_offset = first_data_blockoffset;
+        writeto->offset = 0;
+      }
       printf("f_write:    final block to write.\n");
       int cur_write_bytes = byte_to_write;
       void* cur_buffer = buffer + (bsize - byte_to_write);
+      // hard code:
+      struct dirent* temp = (struct dirent*)cur_buffer;
+      printf("fwriteL hahahhaha buffer: %s\n", temp->filename);
+
+      printf("f_write:     cur data block index %d offset %d\n", writeto->block_index, writeto->offset);
+      printf("f_write:   bsize %d     cur_write_bytes is %d\n", bsize, cur_write_bytes);
+      int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
+      lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
       if(write(cur_disk.diskfd, cur_buffer, cur_write_bytes) != cur_write_bytes) {
         printf("f_write:    2:   write data block failed\n");
         free_struct_table(datatable);
@@ -523,6 +567,7 @@ int f_write(void* buffer, int bsize, int fd) {
       }
       writeto->offset += byte_to_write;
       byte_to_write -= cur_write_bytes;
+      f_seek(fd, 0, SEEKSET);
     }
   }
   return bsize;
@@ -712,6 +757,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   cur_disk.sb.free_inode_head = new_file_inode->next_free_inode;
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
   // need to write new entries into the parent directory file
+  // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
   printf("create file:    before seeking!!\n");
   int seek_res = f_seek(parent_fd, 0, SEEKEND);
   printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
@@ -719,8 +765,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   new_dirent.type = REG;
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
-  // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
-  parent_entry->offset =
+  printf("create_file:      nnnnnnnnn file name is %s\n", new_dirent.filename);
   f_write(&new_dirent, sizeof(struct dirent), parent_fd);
   return new_inode_index;
 }
@@ -751,6 +796,13 @@ static struct table* get_tables(struct file_table_entry* en, struct table* t) {
   int block_index = en->block_index;
   //struct table* t = (struct table*)malloc(sizeof(struct table));
   struct inode* node = (struct inode*)(cur_disk.inodes + en->inode_index * INODE_SIZE);
+  // need to handle the case when file is emtyp and has ZERO data blocks assigned
+  if(node->dblocks[0] == UNDEFINED) {
+    t->table_level = NONE;
+    printf("get_tables: EMPTY\n");
+    return t;
+  }
+
   int inblock_offset = node->size % BLOCKSIZE;
   t->inblock_offset = inblock_offset;
   // level direct:
@@ -893,6 +945,27 @@ static struct table* get_tables(struct file_table_entry* en, struct table* t) {
 // if getting to a new level, cannot memcpy, needs to malloc new buffer
 static int get_next_boffset(struct table* t, struct file_table_entry* en) {
   struct inode* node = (struct inode*)(cur_disk.inodes + en->inode_index * INODE_SIZE);
+  if(t->table_level == NONE) {
+    int first_data_blockoffset = get_next_freeOffset();
+    if(first_data_blockoffset == FAIL) {
+      printf("Get next boffset:   None:      get next free block for data failed\n");
+      return FAIL;
+    }
+    printf("get_next_boffset:   first_table \n");
+    t->table_level = DIRECT;
+    t->inblock_offset = 0;
+    t->intable_index = 0;
+    t->cur_table_size = N_DBLOCKS;
+    t->cur_data_table = node->dblocks;
+    t->level_one = node->dblocks;
+    t->level_one_index = 0;
+    t->level_two = NULL;
+    t->level_two_index = UNDEFINED;
+    t->level_three = NULL;
+    t->level_three_index = UNDEFINED;
+    return t;
+  }
+
   if(t->cur_data_table[t->intable_index] == node->last_block_offset) {
     // needs to assign new blocks
     if(t->intable_index + 1 < t->cur_table_size) {
