@@ -19,7 +19,7 @@ int main() {
   printf("222222222: open dir result is %d\n", result);
   printf("\n\n\n");
   printf("________________________ f-OPEN ___________________\n\n");
-  int new_fd = f_open("home/rusr/haha.txt", "");
+  int new_fd = f_open("home/rusr/haha.txt", OPEN_W);
   printf("_______end of fopen______________\n");
   printf("new file fd is %d\n", new_fd);
   printf("\n\n_______________________read new file dir\n\n");

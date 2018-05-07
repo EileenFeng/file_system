@@ -85,14 +85,14 @@ struct dirent {
 }dirent;
 
 // decides whether ctime is needed
-struct fstat{
+struct fStat{
   int uid; //owner's id
   int gid;
   int filesize;
   int type;
   int permission;
   int inode_index;
-} fstat;
+} fStat;
 
 struct file_table_entry{
   int fd;

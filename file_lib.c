@@ -331,7 +331,7 @@ struct dirent* f_readdir(int dir_fd) {
 
 
 /*********************** FILE functions ***********************/
-int f_stat(int fd, struct fstat* st) {
+int f_stat(int fd, struct fStat* st) {
     struct file_table_entry* entry = open_ft->entries[fd];
     if(entry == NULL) {
         printf("f_stat:     Invalid file descriptor\n");
@@ -513,13 +513,9 @@ int f_open(char* filepath, int access) {
       free(target_file);
       return FAIL;
     } else {
-<<<<<<< HEAD
+
       struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
       printf("fopen: 7:     return value fd is %d\n", openfile->fd);
-=======
-      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir);
-      printf("fope: ___FILE EXISTS____: return value fd is %d\n", openfile->fd);
->>>>>>> 2900699166d18c9f189cc3ffd022a294abca4ae5
       return openfile->fd;
     }
   } else {

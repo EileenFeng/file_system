@@ -7,7 +7,7 @@ int f_open(char* filepath, int access); // partially done, need to handle access
 int f_write(void* buffer, int bsize, int fd); // done NEED TO TEST
 int f_read(void* buffer, int bsize, int fd);
 int f_rewind(int fd); //done
-int f_stat(int fd, struct fstat* st);
+int f_stat(int fd, struct fStat* st);
 /*  when SEEK_END, seek backwards */
 int f_seek(int fd, int offset, int whence); // done
 
