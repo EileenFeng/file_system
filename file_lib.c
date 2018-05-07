@@ -52,6 +52,10 @@ static struct table* get_tables(struct file_table_entry* en, struct table* t);
 static int get_next_boffset(struct table* t, struct file_table_entry* en);
 static void free_struct_table(struct table* t);
 static int get_next_freeOffset();
+// write super block back to disk
+static int write_disk_sb();
+// write inodes back to disk
+static int write_disk_inode();
 //static int get_free_inode();
 /************************ LIB FUNCTIONS *****************************/
 
@@ -510,7 +514,7 @@ int f_write(void* buffer, int bsize, int fd) {
   }
   printf("f_write:     first:  fd is %d cur data block index %d offset %d\n", fd, writeto->block_index, writeto->offset);
   if(write_inode->dblocks[0] == UNDEFINED) {                                                                   
-        int first_data_blockoffset = get_next_freeOffset();
+    int first_data_blockoffset = get_next_freeOffset();
 	if(first_data_blockoffset == FAIL) {
 	  printf("f_write:   empty:      get next free block for data failed\n");
 	  return FAIL;
@@ -522,7 +526,7 @@ int f_write(void* buffer, int bsize, int fd) {
 	writeto->block_offset = first_data_blockoffset;
 	write_inode->last_block_offset = first_data_blockoffset;
 	writeto->offset = 0;
-	
+    write_disk_inode();
   }    
   
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
@@ -787,6 +791,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
   // need to write new entries into the parent directory file
   // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
+  write_disk_sb();
   printf("create file:    before seeking!!\n");
   int seek_res = f_seek(parent_fd, 0, SEEKEND);
   printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
@@ -818,6 +823,7 @@ static void write_newinode(struct inode* new_file_inode, int new_inode_index, in
   new_file_inode->i2block = UNDEFINED;
   new_file_inode->i3block = UNDEFINED;
   new_file_inode->last_block_offset = UNDEFINED;
+  write_disk_inode();
 }
 
 
@@ -1509,9 +1515,27 @@ static int get_next_freeOffset() {
   printf("getnextfree:    ret value is %d     and new head %d\n", ret, oldhead->next_free);
   cur_disk.sb.free_block_head = oldhead->next_free;
   printf("getnextfree: \tnew free_block_head %d\n",cur_disk.sb.free_block_head); 
+  write_disk_sb();
   return ret;
 }
 
+static int write_disk_sb() {
+    lseek(cur_disk.diskfd, BLOCKSIZE, SEEK_SET);
+    if(write(cur_disk.diskfd, &(cur_disk.sb), BLOCKSIZE) != BLOCKSIZE) {
+        printf("Write_disk_sb:  failed\n");
+        return FAIL;
+    }
+    return SUCCESS;
+}
+
+static int write_disk_inode() {
+    lseek(cur_disk.diskfd, cur_disk.sb.inode_offset * BLOCKSIZE, SEEK_SET);
+    if(write(cur_disk.diskfd, cur_disk.inodes, BLOCKSIZE) != BLOCKSIZE) {
+        printf("Write_disk_inodes:  failed\n");
+        return FAIL;
+    }
+    return SUCCESS;
+}
 
 /*
   static struct dirent** get_dirents(int inode_index) {
