@@ -26,15 +26,15 @@
 #define LEVELTWO 16904
 #define LEVELTHREE 2114056
 
-enum fileseek {SSET, SCUR, SEND};
+enum fileseek {SEEKSET, SEEKCUR, SEEKEND};
 enum file_type{DIR, REG};
 enum table_level{DIRECT, I1, I2, I3};
 
 /*
-  1. inode index starting from 0
-  2. root directory always have inode index 0 (the first inode)
-  3. there are 16 inodes in total
-  4. empty directories has no data blocks assigned
+1. inode index starting from 0
+2. root directory always have inode index 0 (the first inode)
+3. there are 16 inodes in total
+4. empty directories has no data blocks assigned
 */
 
 struct user {
@@ -99,10 +99,10 @@ struct file_table_entry{
   int inode_index;
   int type;
   int block_index;/* index of the block relative to this file, for instance this is the 5th data
-		     block for this file, then ‘block_index’ of this block is 5 */
+  block for this file, then ‘block_index’ of this block is 5 */
   int block_offset; // offset index of block in the data region
   int offset; //offset within a block; 0 <= offset <512
-              //once hit 512, update offset = 0 as well as block_offset, incre block_index
+  //once hit 512, update offset = 0 as well as block_offset, incre block_index
   int open_num; // if type == DIR, this field indicates the number of open files under this directory
   char filepath[MAX_LENGTH];
 }file_table_entry;
@@ -152,7 +152,7 @@ struct table {
   int cur_table_size;
   int* cur_data_table;
   int* level_one;
-  int level_one_index; // index of table level_one to obtain level_two table 
+  int level_one_index; // index of table level_one to obtain level_two table
   int* level_two;
   int level_two_index;
   int* level_three;
@@ -160,8 +160,8 @@ struct table {
 }table;
 
 /*
-    direct: data: level one
-    indirect: data: level two
-    i2: data: level two
-    i3: data: level three
+direct: data: level one
+indirect: data: level two
+i2: data: level two
+i3: data: level three
 */

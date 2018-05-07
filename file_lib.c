@@ -322,7 +322,75 @@ struct dirent* f_readdir(int dir_fd) {
   return ret;
 }
 
+int f_seek(int fd, int offset, int whence) {
+  // check for invalid inputs
+  if(offset < 0) {
+    printf("f_seek:   invalid offset: offset cannot be negative numbers\n");
+    return FAIL;
+  }
+  struct file_table_entry* entry = open_ft->entries[fd];
+  if(entry == NULL) {
+    printf("f_seek:  Invalid file descriptor!\n");
+    return FAIL;
+  };
+  struct inode* cur_inode = (struct inode*)(cur_disk.inodes + entry->inode_index * INODE_SIZE);
+  if(whence == SEEKSET) {
+    if(offset > cur_inode->size) {
+      printf("fseek:    Invalid offset! Larger than file size\n");
+      return FAIL;
+    } else {
+      entry->block_index = offset / BLOCKSIZE;
+      entry->offset = offset % BLOCKSIZE;
+      if(offset == entry->block_index * BLOCKSIZE + entry->offset) {
+        return SUCCESS;
+      }
+      struct table* datatable = (struct table*)malloc(sizeof(struct table));
+      get_tables(entry, datatable);
+      entry->block_offset = datatable->cur_data_table[datatable->intable_index];
+      free_struct_table(datatable);
+      return SUCCESS;
+    }
+  } else if (whence == SEEKCUR) {
+    int remain_bytes = cur_inode->size - entry->block_index * BLOCKSIZE - entry->offset;
+    if(offset > remain_bytes) {
+      printf("fseek:    Invalid offset! Seek outside of file range\n");
+      return FAIL;
+    } else {
+      if(entry->offset + offset < BLOCKSIZE) {
+        entry->offset += offset;
+        return SUCCESS;
+      } else {
+        int moreoffset = offset - (BLOCKSIZE - entry->offset);
+        entry->block_index += moreoffset / BLOCKSIZE;
+        entry->offset = moreoffset % BLOCKSIZE;
+        struct table* datatable = (struct table*)malloc(sizeof(struct table));
+        get_tables(entry, datatable);
+        entry->block_offset = datatable->cur_data_table[datatable->intable_index];
+        free_struct_table(datatable);
+        return SUCCESS;
+      }
 
+    }
+  }else if(whence == SEEKEND) {
+    if(offset > cur_inode->size) {
+      printf("fseek:    Invalid offset! Seek backwards outside of file range\n");
+      return FAIL;
+    } else {
+      int pos = cur_inode->size - offset;
+      entry->block_index = pos / BLOCKSIZE;
+      entry->offset = pos % BLOCKSIZE;
+      struct table* datatable = (struct table*)malloc(sizeof(struct table));
+      get_tables(entry, datatable);
+      entry->block_offset = datatable->cur_data_table[datatable->intable_index];
+      free_struct_table(datatable);
+      return SUCCESS;
+    }
+  } else {
+    printf("fseek:    Invalid input! No matching value for 'whence'\n");
+    return FAIL;
+  }
+  return FAIL;
+}
 
 int f_rewind(int fd) {
   struct file_table_entry* target = open_ft->entries[fd];
@@ -351,18 +419,19 @@ int f_open(char* filepath, char* access) {
   char* curdir = parse_path[count];
   int parent_fd = cur_disk.rootdir_fd;
   char parent_path[MAX_LENGTH];
+  printf("fopen:  )))))))))))))))))))) 1\n");
   strcpy(parent_path, "");
   while(curdir != NULL) {
-    printf("current file token is %s\n", curdir);
+    printf("f_open:   ^^^^^^ current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
     // get complete path
     if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
       free_parse(parse_path);
       printf("f_open: filepath invalid: file path too long\n");
       return FAIL;
     }
-    if(parent_fd != cur_disk.rootdir_fd){
-      strcat(parent_path, "/");
-    }
+    //if(parent_fd != cur_disk.rootdir_fd){
+    strcat(parent_path, "/");
+    //}
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
@@ -378,7 +447,9 @@ int f_open(char* filepath, char* access) {
       free_parse(parse_path);
       return FAIL;
     }
+    printf("fopen:   ##### parent_fd is %d\n", parent_fd);
   }
+  printf("fopen:  )))))))))))))))))))) 3\n");
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
   printf("fopen: checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
@@ -457,14 +528,14 @@ int f_write(void* buffer, int bsize, int fd) {
   return bsize;
 }
 
-  /* handled below
-  // if write within the same block
-  if(bsize + writeto->offset < BLOCKSIZE) {
-  if(write_inode->last_block_offset == writeto->block_offset) {
-  // might exceeds file size
-  int offset_inblock = write_inode->size % BLOCKSIZE;
-  if(bsize + writeto->offset > offset_inblock) {
-  write_inode->size += (bsize + writeto->offset - offset_inblock);
+/* handled below
+// if write within the same block
+if(bsize + writeto->offset < BLOCKSIZE) {
+if(write_inode->last_block_offset == writeto->block_offset) {
+// might exceeds file size
+int offset_inblock = write_inode->size % BLOCKSIZE;
+if(bsize + writeto->offset > offset_inblock) {
+write_inode->size += (bsize + writeto->offset - offset_inblock);
 }
 }
 int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
@@ -519,7 +590,7 @@ static char** parse_filepath(char* filepath) {
     char* temp = malloc(sizeof(char) * (strlen(token) + 1));
     strcpy(temp, token);
     parse_result[count] = temp;
-    printf("[arse file path: parse result %d is %s\n", count, parse_result[count]);
+    printf("parse file path: parse result %d is %s\n", count, parse_result[count]);
     token = strtok(NULL, delim);
     count ++;
   }
@@ -560,14 +631,14 @@ static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
   int org_block_offset = origin->block_offset;
 
   struct dirent* temp = f_readdir(parentdir_fd);
-  printf("checkdir exists: OOOOFset parentdir fd is %d origin offset is %d\n", parentdir_fd, origin->offset);
+  //printf("checkdir exists: OOOOFset parentdir fd is %d origin offset is %d\n", parentdir_fd, origin->offset);
   while(temp != NULL) {
     if(strcmp(temp->filename, target) == SUCCESS) {
-      printf("**** In check, exists cur dirent filename %s, and target name %s\n", temp->filename, target);
+      printf("*|*|*|* In check, exists cur dirent filename %s, and target name %s\n", temp->filename, target);
       origin->offset = org_offset;
       origin->block_index = org_block_index;
       origin->block_offset = org_block_offset;
-      printf("+++++++++++++ checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
+      //printf("+++++++++++++ checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
       return temp;
     }
     free(temp);
@@ -641,10 +712,15 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   cur_disk.sb.free_inode_head = new_file_inode->next_free_inode;
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
   // need to write new entries into the parent directory file
+  printf("create file:    before seeking!!\n");
+  int seek_res = f_seek(parent_fd, 0, SEEKEND);
+  printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
   struct dirent new_dirent;
   new_dirent.type = REG;
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
+  // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
+  parent_entry->offset =
   f_write(&new_dirent, sizeof(struct dirent), parent_fd);
   return new_inode_index;
 }
@@ -1301,9 +1377,16 @@ return t->level_three[new_index];
 }
 
 static void free_struct_table(struct table* t) {
-  free(t->level_one);
-  free(t->level_two);
-  free(t->level_three);
+  if(t->table_level == I1) {
+    free(t->level_two);
+  } else if (t->table_level == I2) {
+    free(t->level_one);
+    free(t->level_two);
+  } else if(t->table_level == I3) {
+    free(t->level_one);
+    free(t->level_two);
+    free(t->level_three);
+  }
   free(t);
 }
 
