@@ -1,5 +1,6 @@
 #ifndef FILE_LIB_H_
 #define FILE_LIB_H_
+#include "fs_struct.h"
 
 // library functions
 int f_mount(char* sourcepath); //done
