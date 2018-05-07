@@ -38,7 +38,7 @@ static struct file_table* open_ft;
 /********** HELPER FUNCTION PROTOTYPES **********/
 // helper functions
 /*** create or return an existing open file entry, target is relative child path ***/
-static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* target);
+static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* target, int access, int type);
 /***check whether the parent directory contains the file 'targetdir' ***/
 static struct dirent* checkdir_exist(int parentdir_fd, char*);
 static char** parse_filepath(char* filepath);
@@ -158,6 +158,8 @@ int f_mount(char* sourcepath) {
 }
 
 
+/*********************** directory functions ***********************/
+
 int f_opendir(char* filepath) {
   char** parse_path = parse_filepath(filepath);
   int count = 0;
@@ -183,7 +185,7 @@ int f_opendir(char* filepath) {
       printf("opendir: Cannot open non directory files\n");
       return FAIL;
     }
-    struct file_table_entry* new_entry = create_entry(parent_fd, child_dirent->inode_index, curdir);
+    struct file_table_entry* new_entry = create_entry(parent_fd, child_dirent->inode_index, curdir, OPEN_ALL, DIR);
     parent_fd = new_entry->fd;
     printf("opendir: Next parent dir filepath is %s and fd is %d\n", new_entry->filepath, new_entry->fd);
     count ++;
@@ -327,6 +329,24 @@ struct dirent* f_readdir(int dir_fd) {
   return ret;
 }
 
+
+/*********************** FILE functions ***********************/
+int f_stat(int fd, struct fstat* st) {
+    struct file_table_entry* entry = open_ft->entries[fd];
+    if(entry == NULL) {
+        printf("f_stat:     Invalid file descriptor\n");
+        return FAIL;
+    }
+    struct inode* target = (struct inode*)(cur_disk.inodes + entry->inode_index * INODE_SIZE);
+    st->uid = target->uid;
+    st->gid = target->gid;
+    st->filesize = target->size;
+    st->type = target->type;
+    st->permission = target->permissions;
+    st->inode_index = target->inode_index;
+    return SUCCESS;
+}
+
 int f_seek(int fd, int offset, int whence) {
   // check for invalid inputs
   if(offset < 0) {
@@ -438,17 +458,24 @@ int f_rewind(int fd) {
 }
 
 
-int f_open(char* filepath, char* access) {
+int f_open(char* filepath, int access) {
+    if(!(access == OPEN_W || access == OPEN_R  || access == OPEN_A || access == OPEN_ALL)) {
+        printf("f_open:     Invalid access input\n");
+        return FAIL;
+    }
+
+  printf("__________________ f_open __________________\n");
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
   char* curdir = parse_path[count];
   int parent_fd = cur_disk.rootdir_fd;
   char parent_path[MAX_LENGTH];
-  printf("fopen:  )))))))))))))))))))) 1\n");
   strcpy(parent_path, "");
+
+  // check whether directories along the filepath exists 
   while(curdir != NULL) {
-    printf("\nf_open:   ^^^^^^ current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
+    printf("f_open:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
     // get complete path
     if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
       free_parse(parse_path);
@@ -461,7 +488,7 @@ int f_open(char* filepath, char* access) {
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
-    printf("f_open: parent path for fopen is: %s\n", parent_path);
+    printf("f_open:     2:      parent path for fopen is: %s\n", parent_path);
     prevdir = curdir;
     curdir = parse_path[count];
     if(curdir == NULL){
@@ -473,34 +500,34 @@ int f_open(char* filepath, char* access) {
       free_parse(parse_path);
       return FAIL;
     }
-    printf("f_open:   ##### parent_fd is %d\n", parent_fd);
+    printf("f_open:   3:     parent_fd is %d\n", parent_fd);
   }
-  printf("f_open:  )))))))))))))))))))) 3  parent fd is %d\n", parent_fd);
+  printf("f_open:  4:     parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
-  printf("f_open: checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  printf("f_open: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
   if (target_file != NULL) {
     if(target_file->type != REG) {
-      printf("fopen: file %s is not a regular file\n", prevdir);
+      printf("fopen: 6;     file %s is not a regular file\n", prevdir);
       free_parse(parse_path);
       free(target_file);
       return FAIL;
     } else {
-      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir);
-      printf("fopen: return value fd is %d\n", openfile->fd);
+      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
+      printf("fopen: 7:     return value fd is %d\n", openfile->fd);
       return openfile->fd;
     }
   } else {
     // this is the case when file does not exists,needs to check access
     //createa file with create_file
     // open with create_entry and return the fd
-    printf("f_open:\t ccccccreating new file\n");
+    printf("f_open:     8:       ccccccreating new file\n");
     int new_file_inode = create_file(parent_fd, prevdir, REG);
-    struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir);
+    struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
     
     return new_entry->fd;
   }
-  printf("fopen:  the end\n");
+  printf("fopen:    9:      the end\n");
   return FAIL;
 }
 
@@ -552,21 +579,6 @@ int f_write(void* buffer, int bsize, int fd) {
       //2. call get_next_boffset, which will update datatable and entry, and inode when applciable
       ////not need 3. update file entry's block_index ++, blockoffset to return valueof getnextboffset, and offset = 0
     } else {
-      /*
-      if(write_inode->dblocks[0] == UNDEFINED) {
-        int first_data_blockoffset = get_next_freeOffset();
-        if(first_data_blockoffset == FAIL) {
-          printf("f_write:   empty:      get next free block for data failed\n");
-          return FAIL;
-        }
-        printf("fwrite:   gettting a new block?\n");
-        write_inode->dblocks[0] = first_data_blockoffset;
-        writeto->block_index = 0;
-        writeto->block_offset = first_data_blockoffset;
-        write_inode->last_block_offset = first_data_blockoffset;
-        writeto->offset = 0;
-      }
-      */
       printf("f_write:    final block to write.\n");
       int cur_write_bytes = byte_to_write;
       void* cur_buffer = buffer + (bsize - byte_to_write);
@@ -598,47 +610,6 @@ int f_write(void* buffer, int bsize, int fd) {
   }
   return bsize;
 }
-
-/* handled below
-// if write within the same block
-if(bsize + writeto->offset < BLOCKSIZE) {
-if(write_inode->last_block_offset == writeto->block_offset) {
-// might exceeds file size
-int offset_inblock = write_inode->size % BLOCKSIZE;
-if(bsize + writeto->offset > offset_inblock) {
-write_inode->size += (bsize + writeto->offset - offset_inblock);
-}
-}
-int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
-lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
-if(write(cur_disk.diskfd, buffer, bsize) != bsize) {
-printf("f_write: 1: write to data block failed\n");
-return FAIL;
-}
-writeto->offset += bsize;
-return bsize;
-
-
-
-} else {
-*/
-/*
-  int total_blocknum = write_inode->size % BLOCKSIZE == 0? write_inode->size / BLOCKSIZE : write_inode->size / BLOCKSIZE + 1;
-
-  struct table* datatable = get_tables(writeto);
-  int add_block_num = ((datatable->inblock_offset + bsize - BLOCKSIZE) % BLOCKSIZE) == 0 ? (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE : (datatable->inblock_offset + bsize - BLOCKSIZE) / BLOCKSIZE + 1;
-  printf("f_write: needs to write %d more data blocks.\n", add_block_num);
-
-
-
-  if(datatable->intable_index + add_block_num < TABLE_ENTRYNUM) {
-  // need not to add new data tables
-  } else {
-  // need to add data blocks
-  }
-  // now write blocks
-  }
-*/
 
 
 /*************************** HELPER FUNCTIONS **********************/
@@ -732,7 +703,7 @@ static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
 
 
 
-static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* childpath){
+static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* childpath, int access, int type){
   struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
   printf("create entry chiled inode pased in is %d\n", child_inode);
   struct inode* result_inode = (struct inode*)(cur_disk.inodes + child_inode * INODE_SIZE);
@@ -755,8 +726,9 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   }
   struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
   strcpy(result->filepath, resultpath);
+  result->access = access;
   result->inode_index = child_inode;
-  result->type = DIR;
+  result->type = type;
   result->block_index = 0;
   result->offset = 0;
   result->open_num = 0;
@@ -791,6 +763,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
   // need to write new entries into the parent directory file
   // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
+  write_disk_inode();
   write_disk_sb();
   printf("create file:    before seeking!!\n");
   int seek_res = f_seek(parent_fd, 0, SEEKEND);

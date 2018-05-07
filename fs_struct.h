@@ -29,7 +29,7 @@
 enum fileseek {SEEKSET, SEEKCUR, SEEKEND};
 enum file_type{DIR, REG};
 enum table_level{NONE, DIRECT, I1, I2, I3};
-
+enum file_access {OPEN_W, OPEN_R, OPEN_A, OPEN_ALL};
 /*
 1. inode index starting from 0
 2. root directory always have inode index 0 (the first inode)
@@ -85,19 +85,20 @@ struct dirent {
 }dirent;
 
 // decides whether ctime is needed
-struct f_stat{
+struct fstat{
   int uid; //owner's id
   int gid;
   int filesize;
   int type;
   int permission;
   int inode_index;
-} f_stat;
+} fstat;
 
 struct file_table_entry{
   int fd;
   int inode_index;
   int type;
+  int access;
   int block_index;/* index of the block relative to this file, for instance this is the 5th data
   block for this file, then ‘block_index’ of this block is 5 */
   int block_offset; // offset index of block in the data region
