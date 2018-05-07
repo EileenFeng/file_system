@@ -185,7 +185,7 @@ int f_opendir(char* filepath) {
       printf("opendir: Cannot open non directory files\n");
       return FAIL;
     }
-    struct file_table_entry* new_entry = create_entry(parent_fd, child_dirent->inode_index, curdir, OPEN_ALL, DIR);
+    struct file_table_entry* new_entry = create_entry(parent_fd, child_dirent->inode_index, curdir, OPEN_WR, DIR);
     parent_fd = new_entry->fd;
     printf("opendir: Next parent dir filepath is %s and fd is %d\n", new_entry->filepath, new_entry->fd);
     count ++;
@@ -459,7 +459,7 @@ int f_rewind(int fd) {
 
 
 int f_open(char* filepath, int access) {
-    if(!(access == OPEN_W || access == OPEN_R  || access == OPEN_A || access == OPEN_ALL)) {
+    if(!(access == OPEN_W || access == OPEN_R  || access == OPEN_A || access == OPEN_WR)) {
         printf("f_open:     Invalid access input\n");
         return FAIL;
     }
@@ -506,6 +506,8 @@ int f_open(char* filepath, int access) {
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
   printf("f_open: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
+
+  // if file exists
   if (target_file != NULL) {
     if(target_file->type != REG) {
       printf("fopen: 6;     file %s is not a regular file\n", prevdir);
@@ -513,22 +515,37 @@ int f_open(char* filepath, int access) {
       free(target_file);
       return FAIL;
     } else {
+      if(access == OPEN_R || access == OPEN_A || access == OPEN_WR) {
+        struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
+        printf("fopen: 7:     return value fd is %d\n", openfile->fd);
+        free(target_file);
+        return openfile->fd;
+      } else if (access == OPEN_W) {
+        // needs to remove the file and open and new one;
+        //f_remove
 
-      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
-      printf("fopen: 7:     return value fd is %d\n", openfile->fd);
-      return openfile->fd;
+      }
     }
+
+    // if file does not exists
   } else {
     // this is the case when file does not exists,needs to check access
     //createa file with create_file
     // open with create_entry and return the fd
+    if(access == OPEN_R) {
+      printf("f_open:   10:   cannot read a not existing file!\n");
+      free(target_file);
+      return FAIL;
+    }
+
     printf("f_open:     8:       ccccccreating new file\n");
     int new_file_inode = create_file(parent_fd, prevdir, REG);
     struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
-    
+    free(target_file);
     return new_entry->fd;
   }
   printf("fopen:    9:      the end\n");
+  free(target_file);
   return FAIL;
 }
  
@@ -536,25 +553,32 @@ int f_open(char* filepath, int access) {
 int f_write(void* buffer, int bsize, int fd) {
   struct file_table_entry* writeto = open_ft->entries[fd];
   struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
+  // invalid fd
   if(writeto == NULL) {
     printf("f_write: invalid fd\n");
     return FAIL;
   }
+  // do not have access
+  if(writeto->access == OPEN_R) {
+    printf("f_write:  only have reading access. \n");
+    return FAIL;
+  }
+
   printf("f_write:     first:  fd is %d cur data block index %d offset %d\n", fd, writeto->block_index, writeto->offset);
   if(write_inode->dblocks[0] == UNDEFINED) {                                                             
     int first_data_blockoffset = get_next_freeOffset();
-	if(first_data_blockoffset == FAIL) {
-	  printf("f_write:   empty:      get next free block for data failed\n");
-	  return FAIL;
-	}
-	printf("fwrite:   --------------- gettting a new block? %d\n", first_data_blockoffset);
-	write_inode->dblocks[0] = first_data_blockoffset;
-	printf("File inode %d dblocks is %d\n", write_inode->inode_index, write_inode->dblocks[0]);
-	writeto->block_index = 0;
-	writeto->block_offset = first_data_blockoffset;
-	write_inode->last_block_offset = first_data_blockoffset;
-	writeto->offset = 0;
-	write_disk_inode();
+    if(first_data_blockoffset == FAIL) {
+      printf("f_write:   empty:      get next free block for data failed\n");
+      return FAIL;
+    }
+    printf("fwrite:   --------------- gettting a new block? %d\n", first_data_blockoffset);
+    write_inode->dblocks[0] = first_data_blockoffset;
+    printf("File inode %d dblocks is %d\n", write_inode->inode_index, write_inode->dblocks[0]);
+    writeto->block_index = 0;
+    writeto->block_offset = first_data_blockoffset;
+    write_inode->last_block_offset = first_data_blockoffset;
+    writeto->offset = 0;
+    write_disk_inode();
   }    
   
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
@@ -613,6 +637,58 @@ int f_write(void* buffer, int bsize, int fd) {
   return bsize;
 }
 
+
+int f_close(int fd) {
+  struct file_table_entry* entry = open_ft->entries[fd];
+  if(entry == NULL) {
+    printf("f_close:    1:    Invalid file descriptor! \n");
+    return FAIL;
+  }
+  if(entry->inode_index == ROOT_INDEX) {
+    // need root directory to check
+    printf("f_close:  2:  cannot close root directory. Root directory will be close when unmount\n");
+    return FAIL;
+  }
+
+  if(entry->open_num > 0) {
+    printf("f_close:   Cannot close directories containing opened files.\n");
+    return FAIL;
+  }
+  char filepath[MAX_LENGTH];
+  int copylength = strlen(entry->filepath);
+  for(int i = strlen(entry->filepath) - 1; i >= 0; i --) {
+    if(entry->filepath[i] != '/') {
+      copylength --;
+    }
+  }
+  strncpy(filepath, entry->filepath, copylength);
+  filepath[copylength] = '\0';
+  struct file_table_entry* parent_entry = NULL;
+  if(strcmp(filepath, "/") == SUCCESS) {
+    parent_entry = open_ft->entries[cur_disk.rootdir_fd];
+  } else {
+    printf("f_close:  copytlength is %d and the resultinf parent path is %d\n", copylength, filepath);
+    for(int i = 0 ; i < MAX_OPENFILE; i++) {
+      if(open_ft->entries[i] != NULL) {
+        if(strcmp(open_ft->entries[i]->filepath, filepath) == SUCCESS) {
+          parent_entry = open_ft->entries[i];
+          break;
+        }
+      }
+    }
+  }
+  if(parent_entry == NULL) {
+    printf("f_close:    parent directory is already close. Something went wrong...\n");
+    return FAIL;
+  }
+  if(parent_entry->open_num <= 0) {
+    printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
+    return FAIL;
+  }
+  parent_entry->open_num --;
+  free(entry);
+  return SUCCESS;
+}
 
 /*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
@@ -710,6 +786,8 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   printf("create entry chiled inode pased in is %d\n", child_inode);
   struct inode* result_inode = (struct inode*)(cur_disk.inodes + child_inode * INODE_SIZE);
   printf("create entry: inode index is %d and size is %d\n", result_inode->inode_index, result_inode->size);
+
+  // heyt the children path, and check whether the target file is already opened
   char resultpath[MAX_LENGTH];
   strcpy(resultpath, parent_entry->filepath);
   if(parent_fd != cur_disk.rootdir_fd){
@@ -726,15 +804,31 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
       return temp;
     }
   }
+
+  // create a new entry
   struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
   strcpy(result->filepath, resultpath);
   result->access = access;
   result->inode_index = child_inode;
   result->type = type;
-  result->block_index = 0;
-  result->offset = 0;
-  result->open_num = 0;
-  result->block_offset = result_inode->size > 0 ? result_inode->dblocks[0] : UNDEFINED;
+  if(type == DIR) {
+    result->open_num = 0;
+  } else {
+    result->open_num = UNDEFINED;
+  }
+  if(access == OPEN_R || access == OPEN_W || access == OPEN_WR) {
+    result->block_index = 0;
+    result->offset = 0;
+    result->block_offset = result_inode->size > 0 ? result_inode->dblocks[0] : UNDEFINED;
+  } else if (access == OPEN_A) {
+    printf("create_entry:     appending\n");
+    struct table* datatable = (struct table*)malloc(sizeof(struct table));
+    result->block_index = result_inode->size % BLOCKSIZE == 0 ? result_inode->size / BLOCKSIZE : result_inode->size / BLOCKSIZE + 1;
+    result->offset = result_inode->size % BLOCKSIZE;
+    get_tables(result, datatable);
+    result->block_offset = datatable->cur_data_table[datatable->intable_index];
+  }
+
   printf("create entry: childname is %s child inode is %d, blockoffset is %d\n", result->filepath, result->inode_index, result->block_offset);
   // assigning fd
   int freefd_index = MAX_OPENFILE - open_ft->free_fd_num;
@@ -1514,6 +1608,7 @@ static int write_disk_inode() {
     }
     return SUCCESS;
 }
+
 
 /*
   static struct dirent** get_dirents(int inode_index) {
