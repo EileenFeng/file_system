@@ -709,6 +709,10 @@ int f_close(int fd) {
    printf("9\n");
   free(entry);
    printf("10\n");
+   // update file table
+  open_ft->free_id[fd] = fd;
+  open_ft->free_fd_num ++;
+  open_ft->filenum ++;
   return SUCCESS;
 }
 
@@ -753,17 +757,6 @@ static void free_parse(char** parse_result) {
   free(parse_result);
 }
 
-
-
-static void update_ft(struct file_table_entry* new_entry, int new_index) {
-  open_ft->free_id[new_index] = UNDEFINED;
-  open_ft->free_fd_num --;
-  open_ft->entries[open_ft->filenum] = new_entry;
-  open_ft->filenum ++;
-}
-
-
-
 static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
   printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
@@ -802,6 +795,20 @@ static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
 }
 
 
+static void update_ft(struct file_table_entry* new_entry, int new_index) {
+  open_ft->free_id[new_index] = UNDEFINED;
+  open_ft->free_fd_num --;
+  open_ft->entries[open_ft->filenum] = new_entry;
+  open_ft->filenum ++;
+}
+
+static int get_free_fd_index() {
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    if(open_ft->free_id[i] > 0) {
+      return i;
+    }
+  }
+}
 
 static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* childpath, int access, int type){
   struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
@@ -855,7 +862,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
 
   printf("create entry: childname is %s child inode is %d, blockoffset is %d\n", result->filepath, result->inode_index, result->block_offset);
   // assigning fd
-  int freefd_index = MAX_OPENFILE - open_ft->free_fd_num;
+  int freefd_index = get_free_fd_index();
   result->fd = open_ft->free_id[freefd_index];
   update_ft(result, freefd_index);
   parent_entry->open_num ++;
