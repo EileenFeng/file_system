@@ -487,7 +487,7 @@ int f_open(char* filepath, char* access) {
       return FAIL;
     } else {
       struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir);
-      printf("fopen: return value fd is %d\n", openfile->fd);
+      printf("fope: ___FILE EXISTS____: return value fd is %d\n", openfile->fd);
       return openfile->fd;
     }
   } else {
