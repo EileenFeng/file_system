@@ -513,8 +513,13 @@ int f_open(char* filepath, int access) {
       free(target_file);
       return FAIL;
     } else {
+<<<<<<< HEAD
       struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
       printf("fopen: 7:     return value fd is %d\n", openfile->fd);
+=======
+      struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir);
+      printf("fope: ___FILE EXISTS____: return value fd is %d\n", openfile->fd);
+>>>>>>> 2900699166d18c9f189cc3ffd022a294abca4ae5
       return openfile->fd;
     }
   } else {
@@ -530,7 +535,7 @@ int f_open(char* filepath, int access) {
   printf("fopen:    9:      the end\n");
   return FAIL;
 }
-
+ 
 
 int f_write(void* buffer, int bsize, int fd) {
   struct file_table_entry* writeto = open_ft->entries[fd];
@@ -540,7 +545,7 @@ int f_write(void* buffer, int bsize, int fd) {
     return FAIL;
   }
   printf("f_write:     first:  fd is %d cur data block index %d offset %d\n", fd, writeto->block_index, writeto->offset);
-  if(write_inode->dblocks[0] == UNDEFINED) {                                                                   
+  if(write_inode->dblocks[0] == UNDEFINED) {                                                             
     int first_data_blockoffset = get_next_freeOffset();
 	if(first_data_blockoffset == FAIL) {
 	  printf("f_write:   empty:      get next free block for data failed\n");
@@ -553,7 +558,7 @@ int f_write(void* buffer, int bsize, int fd) {
 	writeto->block_offset = first_data_blockoffset;
 	write_inode->last_block_offset = first_data_blockoffset;
 	writeto->offset = 0;
-    write_disk_inode();
+	write_disk_inode();
   }    
   
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
@@ -608,6 +613,7 @@ int f_write(void* buffer, int bsize, int fd) {
       printf("f_write:\t after ssssseek block index %d and offset %d\n", writeto->block_index, writeto->offset);    
     }
   }
+  write_disk_inode();
   return bsize;
 }
 
@@ -773,7 +779,8 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
   printf("create_file:      nnnnnnnnn file name is %s\n", new_dirent.filename);
-  f_write(&new_dirent, sizeof(struct dirent), parent_fd);
+  int write = f_write(&new_dirent, sizeof(struct dirent), parent_fd);
+  printf("create file:      wrote %d bytes\n", write);
   return new_inode_index;
 }
 
@@ -1502,8 +1509,10 @@ static int write_disk_sb() {
 }
 
 static int write_disk_inode() {
-    lseek(cur_disk.diskfd, cur_disk.sb.inode_offset * BLOCKSIZE, SEEK_SET);
-    if(write(cur_disk.diskfd, cur_disk.inodes, BLOCKSIZE) != BLOCKSIZE) {
+    lseek(cur_disk.diskfd, BLOCKSIZE * 2, SEEK_SET);
+    printf("writing inode\n");
+    int size = (cur_disk.sb.data_offset - cur_disk.sb.inode_offset) * BLOCKSIZE;
+    if(write(cur_disk.diskfd, cur_disk.inodes, size) != size) {
         printf("Write_disk_inodes:  failed\n");
         return FAIL;
     }
