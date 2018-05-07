@@ -523,7 +523,11 @@ int f_open(char* filepath, int access) {
       } else if (access == OPEN_W) {
         // needs to remove the file and open and new one;
         //f_remove
-
+	printf("need to remove first but now just return\n");
+	struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
+	printf("fopen: 7:     return value fd is %d\n", openfile->fd);
+	free(target_file);
+	return openfile->fd;
       }
     }
 
@@ -639,6 +643,10 @@ int f_write(void* buffer, int bsize, int fd) {
 
 
 int f_close(int fd) {
+  if(fd < 0) {
+    printf("f_close:    Invalid file descriptor (negative)!\n");
+    return FAIL;
+  }
   struct file_table_entry* entry = open_ft->entries[fd];
   if(entry == NULL) {
     printf("f_close:    1:    Invalid file descriptor! \n");
@@ -649,25 +657,35 @@ int f_close(int fd) {
     printf("f_close:  2:  cannot close root directory. Root directory will be close when unmount\n");
     return FAIL;
   }
-
+  printf("1\n");
   if(entry->open_num > 0) {
     printf("f_close:   Cannot close directories containing opened files.\n");
     return FAIL;
   }
+   printf("2\n");
   char filepath[MAX_LENGTH];
   int copylength = strlen(entry->filepath);
+   printf("3\n");
   for(int i = strlen(entry->filepath) - 1; i >= 0; i --) {
     if(entry->filepath[i] != '/') {
       copylength --;
+    } else {
+      copylength --;
+      break;
     }
   }
+  printf("orginal path is %s  copylength is %d\n", entry->filepath, copylength);
+   printf("4\n");
   strncpy(filepath, entry->filepath, copylength);
+   printf("5\n");
   filepath[copylength] = '\0';
+   printf("6\n");
+   printf("f_close:  copytlength is %d and the resultinf parent path is %s\n", copylength, filepath); 
   struct file_table_entry* parent_entry = NULL;
   if(strcmp(filepath, "/") == SUCCESS) {
     parent_entry = open_ft->entries[cur_disk.rootdir_fd];
   } else {
-    printf("f_close:  copytlength is %d and the resultinf parent path is %d\n", copylength, filepath);
+    printf("f_close:  getting the parent entry\n");
     for(int i = 0 ; i < MAX_OPENFILE; i++) {
       if(open_ft->entries[i] != NULL) {
         if(strcmp(open_ft->entries[i]->filepath, filepath) == SUCCESS) {
@@ -677,6 +695,7 @@ int f_close(int fd) {
       }
     }
   }
+   printf("7\n");
   if(parent_entry == NULL) {
     printf("f_close:    parent directory is already close. Something went wrong...\n");
     return FAIL;
@@ -685,8 +704,11 @@ int f_close(int fd) {
     printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
     return FAIL;
   }
+   printf("8\n");
   parent_entry->open_num --;
+   printf("9\n");
   free(entry);
+   printf("10\n");
   return SUCCESS;
 }
 
@@ -806,6 +828,8 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   }
 
   // create a new entry
+  printf("create_entry:   _____ file %s not open ____ needs to open a new one\n", resultpath);
+  printf("create_entry: curparent is %s and number of open file%d\n", parent_entry->filepath, parent_entry->open_num);
   struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
   strcpy(result->filepath, resultpath);
   result->access = access;

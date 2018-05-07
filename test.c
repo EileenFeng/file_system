@@ -19,7 +19,7 @@ int main() {
   printf("222222222: open dir result is %d\n", result);
   printf("\n\n\n");
   printf("________________________ f-OPEN ___________________\n\n");
-  int new_fd = f_open("home/rusr/haha.txt", OPEN_R);
+  int new_fd = f_open("home/rusr/haha.txt", OPEN_W);
   printf("_______end of fopen______________\n");
   printf("new file fd is %d\n", new_fd);
   printf("\n\n_______________________read new file dir\n\n");
@@ -27,6 +27,17 @@ int main() {
   //printf("again %d\n", again);
   struct dirent* rusrdir = f_readdir(result);
   printf("should: %s\n", rusrdir->filename);
+  printf("\n\n______ f_close _________\n");
+  f_close(new_fd);
+  printf("________________________ f-OPEN 2222 ___________________\n\n");
+  int newnew_fd = f_open("home/rusr/haha.txt", OPEN_W);
+  printf("_______end of fopen______________\n");
+  printf("new file fd is %d\n", new_fd);
+  printf("\n\n_______________________read new file dir\n\n");
+  //  int again = f_open("home/rusr/hahaha.txt", "");
+  //printf("again %d\n", again);
+  rusrdir = f_readdir(result);
+  printf("should: %s\n", rusrdir->filename);               
   //  struct dirent* againn  = f_readdir(result);
   //printf("and again %s\n", againn->filename);
   //f_open("/home/eileen/haha/lol.txt", "dajs");
