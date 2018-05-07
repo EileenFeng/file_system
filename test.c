@@ -36,6 +36,7 @@ int main() {
   printf("\n\n_______________________read new file dir\n\n");
   //  int again = f_open("home/rusr/hahaha.txt", "");
   //printf("again %d\n", again);
+  f_seek(result, 0, SEEKSET);
   rusrdir = f_readdir(result);
   printf("should: %s\n", rusrdir->filename);               
   //  struct dirent* againn  = f_readdir(result);
