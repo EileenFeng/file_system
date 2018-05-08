@@ -1376,6 +1376,7 @@ int f_mkdir(char* filepath, int mode) {
       free(target_file);
       return FAIL;
     } else {
+      printf("f_mkdir: 6 creatting same name\n");
       int new_index = create_file(parent_fd, prevdir, DIR, mode);
       free(target_file);
       return new_index;
@@ -1574,7 +1575,7 @@ static int create_file(int parent_fd, char* newfile_name, int type, int permissi
   printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
   struct dirent new_dirent;
   bzero(&new_dirent, sizeof(struct dirent));
-  new_dirent.type = REG;
+  new_dirent.type = type;
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
   printf("create_file:      nnnnnnnnn file name is %s\n", new_dirent.filename);
