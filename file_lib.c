@@ -56,7 +56,10 @@ static int get_next_freeOffset();
 static int write_disk_sb();
 // write inodes back to disk
 static int write_disk_inode();
-//static int get_free_inode();
+// remove the dirent from the parent dir
+static int remove_dirent(int parent_inode, int child_inode);
+// free the inode
+static int free_inode(int inode_index);
 /************************ LIB FUNCTIONS *****************************/
 
 int f_mount(char* sourcepath) {
@@ -331,6 +334,533 @@ struct dirent* f_readdir(int dir_fd) {
 
 
 /*********************** FILE functions ***********************/
+int f_remove(char* filepath) {
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* prevdir = NULL;
+  char* curdir = parse_path[count];
+  int parent_fd = cur_disk.rootdir_fd;
+  char parent_path[MAX_LENGTH];
+  strcpy(parent_path, "");
+
+  printf("\n\n================ f_remove =======================\n");
+  // check whether directories along the filepath exists 
+  while(curdir != NULL) {
+    printf("f_remove:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
+    // get complete path
+    if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
+      free_parse(parse_path);
+      printf("f_remove: filepath invalid: file path too long\n");
+      return FAIL;
+    }
+    //if(parent_fd != cur_disk.rootdir_fd){
+    strcat(parent_path, "/");
+    //}
+    strcat(parent_path, curdir);
+    // check if parent directory exists
+    count ++;
+    printf("f_remove:     2:      parent path for fopen is: %s\n", parent_path);
+    prevdir = curdir;
+    curdir = parse_path[count];
+    if(curdir == NULL){
+      break;
+    }
+    parent_fd = f_opendir(parent_path);
+    if(parent_fd == FAIL) {
+      printf("f_remove: Directory %s along the way does not exists\n", parent_path);
+      free_parse(parse_path);
+      return FAIL;
+    }
+    printf("f_remove:   3:     parent_fd is %d\n", parent_fd);
+  }
+  printf("f_remove:  4:     parent fd is %d\n", parent_fd);
+  // now prevdir contains the file to be OPENED, parent dir is the parent Directory
+  printf("f_remove: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
+
+  // cannot remove a not existing file
+  if(target_file == NULL) {
+    printf("f_remove:   6:    Cannot remove a file that does not exist. \n");
+    free(parse_path);
+    free(target_file);
+    return FAIL;
+  }
+  // cannot remove a directory with f_remove
+  if(target_file->type != REG) {
+    printf("f_remove:    7:    Cannot remove a directory file with f_remove\n");
+    free(parse_path);
+    free(target_file);
+    return FAIL;
+  }
+
+  // get the inode of target file, need to do:
+  /* 
+    1. free all the data blocks along the way;
+    2. remove the dirent entry from the parent file
+    3. free the inode
+    4. update the free block list, free block list head,  free inode, free inode head in sb
+    5. write the updated inodes and sb back to disk!!!!!
+  */
+
+  //printf("f_remove:     AT end of remove, parent file to be close is %s with fd %d and removed file is %s\n", parent_path, parent_fd, filepath);
+
+  struct inode* target = (struct inode*)(cur_disk.inodes + target_file->inode_index * INODE_SIZE);
+  // 1. free all the data blocks along the way
+  int filesize = target->size;
+  int* block_buffer = (int*)malloc(BLOCKSIZE);
+  
+  // free dblocks
+  if(filesize > 0) {
+    for(int i = 0; i < N_DBLOCKS; i ++) {
+      if(filesize > 0) {
+        printf("f_remove:     1; free direct blocks, cur filesize %d\n", filesize);
+        int block_offset = target->dblocks[i];
+        // update the free block head
+        int oldhead = cur_disk.sb.free_block_head;
+        bzero(block_buffer, BLOCKSIZE);
+        block_buffer[0] = oldhead;
+        cur_disk.sb.free_block_head = block_offset;
+        int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+        if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+          printf("f_remove:     free data block in dblocks failed\n");
+          free(block_buffer);
+          free(parse_path);
+          free(target_file);
+          return FAIL;
+        }
+        filesize -= BLOCKSIZE;
+        printf("f_remove:     2; direct blocks, updated filesize %d\n", filesize);
+      } else {
+        break;
+      }
+    }
+    write_disk_sb();
+  }
+  // if filesize < 0 after dblocks, return the inode to free inodes
+  if(filesize <= 0) {
+    remove_dirent(target->parent_inode, target->inode_index);
+    free_inode(target->inode_index);
+    free(block_buffer);
+    return SUCCESS;
+  }
+
+// indirect level
+  int* levelone = (int*)malloc(BLOCKSIZE);
+  //free indirect 
+  if(filesize > 0) {
+    for(int i = 0; i < N_IBLOCKS; i ++) {
+      if(filesize <= 0) {
+        break;
+      }
+      int datatable_offset = target->iblocks[i];
+      int fileoffset = cur_disk.data_region_offset + datatable_offset * BLOCKSIZE;
+      lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+      if(read(cur_disk.diskfd, (void*)levelone, BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:     indirect:     read in data table failed\n");
+        free(block_buffer);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        return FAIL;
+      }
+
+      // free the data table pointed to by iblocks[i](datatable_offset)
+      int oldhead = cur_disk.sb.free_block_head;
+      bzero(block_buffer, BLOCKSIZE);
+      block_buffer[0] = oldhead;
+      cur_disk.sb.free_block_head = datatable_offset;
+      fileoffset = cur_disk.data_region_offset + datatable_offset* BLOCKSIZE;
+      lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+      if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:     free levelone[i] in indblocks failed\n");
+        free(block_buffer);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        return FAIL;
+      }
+      write_disk_sb();
+
+      for(int i = 0; i < TABLE_ENTRYNUM; i++) {
+        if(filesize <= 0) {
+          break;
+        }
+        int block_offset = levelone[i];
+        int oldhead = cur_disk.sb.free_block_head;
+        bzero(block_buffer, BLOCKSIZE);
+        block_buffer[0] = oldhead;
+        cur_disk.sb.free_block_head = block_offset;
+        int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+        if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+          printf("f_remove:     free data block in indblocks failed\n");
+          free(block_buffer);
+          free(parse_path);
+          free(target_file);
+          return FAIL;
+        }
+        filesize -= BLOCKSIZE;
+        printf("f_remove:     2; indirect blocks, updated filesize %d\n", filesize);
+      }
+      write_disk_sb();
+      if(filesize <= 0) {
+        break;
+      }
+    }
+  }
+
+  // if filesize < 0 after iblocks, return the inode to free inodes
+  if(filesize <= 0) {
+    remove_dirent(target->parent_inode, target->inode_index);
+    free_inode(target->inode_index);
+    free(parse_path);
+    free(target_file);
+    free(levelone);
+    free(block_buffer);
+    return SUCCESS;
+  }
+
+  // free blocks in level2
+  int* leveltwo = (int*)malloc(BLOCKSIZE);
+  if(filesize > 0) {
+    bzero(levelone, BLOCKSIZE);
+    int i2offset = cur_disk.data_region_offset + target->i2block * BLOCKSIZE;
+    lseek(cur_disk.diskfd, i2offset, SEEK_SET);
+    if(read(cur_disk.diskfd, levelone, BLOCKSIZE) != BLOCKSIZE) {
+      printf("f_remove:   read in level one table failed in i2block\n");
+      free_inode(target->inode_index);
+      free(levelone);
+      free(leveltwo);
+      free(parse_path);
+      free(target_file);
+      free(block_buffer);
+      return FAIL;
+    }
+
+    // free the block pointed to by i2block
+    int oldhead = cur_disk.sb.free_block_head;
+    bzero(block_buffer, BLOCKSIZE);
+    block_buffer[0] = oldhead;
+    cur_disk.sb.free_block_head = target->i2block;
+    lseek(cur_disk.diskfd, i2offset, SEEK_SET);
+    if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+      printf("f_remove:     free i2offset in i2dblocks failed\n");
+      free(block_buffer);
+      free(parse_path);
+      free(target_file);
+      return FAIL;
+    }
+    write_disk_sb();
+    
+
+    for(int i = 0; i < TABLE_ENTRYNUM; i++) {
+      if(filesize <= 0) {
+        break;
+      }
+      int levelone_index = levelone[i];
+      int datatable_offset = cur_disk.data_region_offset + levelone_index * BLOCKSIZE;
+      lseek(cur_disk.diskfd, datatable_offset, SEEK_SET);
+      bzero(leveltwo, BLOCKSIZE);
+      if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:   read in LEVEL TWO data table failed in i2block\n");
+        free_inode(target->inode_index);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        free(leveltwo);
+        free(block_buffer);
+        return FAIL;
+      }
+
+      // free the data table pointed to by levelone[i]
+      int oldhead = cur_disk.sb.free_block_head;
+      bzero(block_buffer, BLOCKSIZE);
+      block_buffer[0] = oldhead;
+      cur_disk.sb.free_block_head = levelone[i];
+      lseek(cur_disk.diskfd, datatable_offset, SEEK_SET);
+      if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:     free levelone[i] in indblocks failed\n");
+        free(block_buffer);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        free(leveltwo);
+        return FAIL;
+      }
+      write_disk_sb();
+      
+      // traverse current indices table
+      for(int j = 0; j < TABLE_ENTRYNUM; j++) {
+        if(filesize <= 0) {
+          break;
+        }
+        int block_offset = leveltwo[i];
+        int oldhead = cur_disk.sb.free_block_head;
+        bzero(block_buffer, BLOCKSIZE);
+        block_buffer[0] = oldhead;
+        cur_disk.sb.free_block_head = block_offset;
+        int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+        lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+        if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+          printf("f_remove:     free data block in level2 dblocks failed\n");
+          free(parse_path);
+          free(target_file);
+          free(block_buffer);
+          free(levelone);
+          free(leveltwo);
+          return FAIL;
+        }
+        filesize -= BLOCKSIZE;
+        printf("f_remove:     i2block blocks,   updated filesize %d\n", filesize);
+      }
+      write_disk_sb();
+      if(filesize <= 0){
+        break;
+      }
+    }
+  } 
+
+  // if filesize < 0 after i2blocks, return the inode to free inodes
+  if(filesize <= 0) {
+    remove_dirent(target->parent_inode, target->inode_index);
+    free_inode(target->inode_index);
+    free(parse_path);
+    free(target_file);
+    free(levelone);
+    free(leveltwo);
+    free(block_buffer);
+    return SUCCESS;
+  }
+
+  // level i3block
+  int* levelthree = (int*)malloc(BLOCKSIZE);
+  if(filesize > 0) {
+    bzero(levelone, BLOCKSIZE);
+    int i3offset = cur_disk.data_region_offset = target->i3block * BLOCKSIZE;
+    lseek(cur_disk.diskfd, i3offset, SEEK_SET);
+    if(read(cur_disk.diskfd, levelone, BLOCKSIZE) != BLOCKSIZE) {
+      printf("f_remove:   333 read in level one table failed in i3block\n");
+      free_inode(target->inode_index);
+      free(levelone);
+      free(leveltwo);
+      free(levelthree);
+      free(parse_path);
+      free(target_file);
+      free(block_buffer);
+      return FAIL;
+    }
+
+    // free the block pointed to by i3block
+    int oldhead = cur_disk.sb.free_block_head;
+    bzero(block_buffer, BLOCKSIZE);
+    block_buffer[0] = oldhead;
+    cur_disk.sb.free_block_head = target->i3block;
+    lseek(cur_disk.diskfd, i3offset, SEEK_SET);
+    if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+      printf("f_remove:     free i2offset in i2dblocks failed\n");
+      free(levelone);
+      free(leveltwo);
+      free(levelthree);
+      free(parse_path);
+      free(target_file);
+      free(block_buffer);
+      return FAIL;
+    }
+    write_disk_sb();
+
+
+    // levelone 
+    for(int i = 0; i < TABLE_ENTRYNUM; i++) {
+      if(filesize <= 0) {
+        break;
+      }
+      int level2_index = levelone[i];
+      int level2_offset = cur_disk.data_region_offset + level2_index * BLOCKSIZE;
+      lseek(cur_disk.diskfd, level2_offset, SEEK_SET);
+      bzero(leveltwo, BLOCKSIZE);
+      if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:  33333 read in LEVEL TWO data table failed in i3block\n");
+        free_inode(target->inode_index);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        free(leveltwo);
+        free(levelthree);
+        free(block_buffer);
+        return FAIL;
+      }
+
+      // free the data table pointed to by levelone[i]
+      int oldhead = cur_disk.sb.free_block_head;
+      bzero(block_buffer, BLOCKSIZE);
+      block_buffer[0] = oldhead;
+      cur_disk.sb.free_block_head = levelone[i];
+      lseek(cur_disk.diskfd, levelone[i], SEEK_SET);
+      if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+        printf("f_remove:     free levelone[i] in indblocks failed\n");
+        free(block_buffer);
+        free(parse_path);
+        free(target_file);
+        free(levelone);
+        free(leveltwo);
+        free(levelthree);
+        return FAIL;
+      }
+      write_disk_sb();
+
+      // leveltwo
+      for(int j = 0; j < TABLE_ENTRYNUM; j++) {
+        if(filesize <= 0) {
+          break;
+        }
+        int level3_index = leveltwo[j];
+        int level3_offset = cur_disk.data_region_offset + level3_index * BLOCKSIZE;
+        lseek(cur_disk.diskfd, level3_offset, SEEK_SET);
+        bzero(levelthree, BLOCKSIZE);
+        if(read(cur_disk.diskfd, levelthree, BLOCKSIZE) != BLOCKSIZE) {
+          printf("f_remove:  33333 read in LEVEL THREE data table failed in i3block\n");
+          free_inode(target->inode_index);
+          free(parse_path);
+          free(target_file);
+          free(levelone);
+          free(leveltwo);
+          free(levelthree);
+          free(block_buffer);
+          return FAIL;
+        }
+
+        // free the data table pointed to by leveltwo[i]
+        int oldhead = cur_disk.sb.free_block_head;
+        bzero(block_buffer, BLOCKSIZE);
+        block_buffer[0] = oldhead;
+        cur_disk.sb.free_block_head = leveltwo[i];
+        lseek(cur_disk.diskfd, leveltwo[i], SEEK_SET);
+        if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+          printf("f_remove:     free levelone[i] in indblocks failed\n");
+          free(block_buffer);
+          free(parse_path);
+          free(target_file);
+          free(levelone);
+          free(leveltwo);
+          free(levelthree);
+          return FAIL;
+        }
+        write_disk_sb();
+
+        // data level
+        for(int z = 0; z < TABLE_ENTRYNUM; z++) {
+          if(filesize <= 0) {
+            break;
+          }
+          int block_offset = levelthree[z];
+          int oldhead = cur_disk.sb.free_block_head;
+          bzero(block_buffer, BLOCKSIZE);
+          block_buffer[0] = oldhead;
+          cur_disk.sb.free_block_head = block_offset;
+          int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+          lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+          if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
+            printf("f_remove:     333 free data block in i3dblocks failed\n");
+            free(parse_path);
+            free(target_file);
+            free(block_buffer);
+            free(levelone);
+            free(leveltwo);
+            free(levelthree);
+            return FAIL;
+          }
+          filesize -= BLOCKSIZE;
+          printf("f_remove:     i3block blocks,   updated filesize %d\n", filesize);
+        }
+        if(filesize <= 0) {
+          break;
+        }
+      }
+      if(filesize <= 0 ) {
+        break;
+      }
+    }
+  }
+
+  // if filesize < 0 after i22blocks, return the inode to free inodes
+  if(filesize <= 0) {
+    remove_dirent(target->parent_inode, target->inode_index);
+    free_inode(target->inode_index);
+    free(parse_path);
+    free(target_file);
+    free(levelone);
+    free(leveltwo);
+    free(levelthree);
+    free(block_buffer);
+    return SUCCESS;
+  }
+
+  f_close(parent_fd);
+  return FAIL;
+  // need to close filepath
+}
+
+int f_read(void* buffer, int bsize, int fd) {
+  struct file_table_entry* entry = open_ft->entries[fd];
+  if(entry == NULL) {
+    printf("f_read:     Invalid file descriptor!\n");
+    return FAIL;
+  }
+  if(buffer == NULL) {
+    printf("f_read:     Buffer cannot be NULL.\n");
+    return FAIL;
+  }
+  if(bsize < 0) {
+    printf("f_read:   number of bytes to read cannot be negative. \n");
+    return FAIL;
+  }
+  if(bsize + entry->offset < BLOCKSIZE) {
+    printf("f_read:    easy case\n");
+    int fileoffset = cur_disk.data_region_offset + entry->block_offset * BLOCKSIZE + entry->offset;
+    lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+    if(read(cur_disk.diskfd, buffer, bsize) != bsize) {
+      printf("f_read:   Read from file failed.\n");
+      return FAIL;
+    }
+    entry->offset += bsize;
+    return bsize;
+  } 
+
+  struct table* datatable = (struct table*)malloc(sizeof(struct table));
+  get_tables(entry, datatable);
+  int end_offset = (BLOCKSIZE - entry->offset) % BLOCKSIZE;
+  int bytes_toread = bsize;
+  while(bytes_toread > 0) {
+    int fileoffset = cur_disk.data_region_offset + entry->block_offset * BLOCKSIZE + entry->offset;
+    lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
+    void* cur_buffer = buffer + (bsize - bytes_toread);
+    if(bytes_toread >= BLOCKSIZE - entry->offset) {
+      int cur_read = BLOCKSIZE - entry->offset;
+      if(read(cur_disk.diskfd, cur_buffer, cur_read) != cur_read) {
+        printf("f_read: read in the last block failed\n");
+        free_struct_table(datatable);
+        return FAIL;
+      }
+      get_next_boffset(datatable, entry);
+      entry->offset = 0;
+    } else {
+      entry->offset += bytes_toread;
+      if(read(cur_disk.diskfd, cur_buffer, bytes_toread) != bytes_toread) {
+        printf("f_read: read in the last block failed\n");
+        free_struct_table(datatable);
+        return FAIL;
+      }
+      free_struct_table(datatable);
+      return bsize;
+    }
+  }
+  free_struct_table(datatable);
+  return FAIL;
+}
+
+
+
 int f_stat(int fd, struct fStat* st) {
     struct file_table_entry* entry = open_ft->entries[fd];
     if(entry == NULL) {
@@ -658,7 +1188,7 @@ int f_close(int fd) {
     return FAIL;
   }
   printf("1\n");
-  if(entry->open_num > 0) {
+  if(entry->type == DIR && entry->open_num > 0) {
     printf("f_close:   Cannot close directories containing opened files.\n");
     return FAIL;
   }
@@ -1639,52 +2169,35 @@ static int write_disk_inode() {
     }
     return SUCCESS;
 }
-
-
-/*
-  static struct dirent** get_dirents(int inode_index) {
-  struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * BLOCKSIZE);
-  if(target->nlink == 0) {
-  printf("Invalid inode! Inode is free!\n");
-  return NULL;
-  }
-  if(target->type != DIR) {
-  printf("Input file is not a directory! \n");
-  return NULL;
-  }
-  if(target->size == 0) {
-  printf("Directory does not contain any files\n");
-  return NULL;
-  }
-  int bytestoread = target->size;
-  int size = 5;
-  int dirent_num = size;
-
-  struct dirent** res = (struct dirent**)malloc(sizeof(struct dirent*) * size);
-  void* buffer = malloc(BLOCKSIZE);
+// free the inode
+static int free_inode(int inode_index) {
+  struct inode* tofree = (struct inode*)(cur_disk.inodes + inode_index * INODE_SIZE);
   for(int i = 0; i < N_DBLOCKS; i++) {
-  if(bytestoread <= 0) {
-  free(buffer);
-  return res;
+    tofree->dblocks[i] = UNDEFINED;
   }
-  bzero(buffer, BLOCKSIZE);
-  int read_bytes = bytestoread < BLOCKSIZE ? bytestoread : BLOCKSIZE;
-  int block_index = target->dblocks[i];
-  lseek(cur_disk.diskfd, cur_disk.data_region_offset + block_index * BLOCKSIZE, SEEK_SET);
-  if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-  printf("read in data block in get dirents failed in dblocks\n");
-  free(buffer);
+  for(int i = 0; i < N_IBLOCKS; i++) {
+    tofree->iblocks[i] = UNDEFINED;
+  }
+  int old_free_head = cur_disk.sb.free_inode_head;
+  tofree->nlink = 0;
+  tofree->next_free_inode = old_free_head;
+  cur_disk.sb.free_inode_head = inode_index;
+  write_disk_inode();
+  write_disk_sb();
+  return SUCCESS;
+}
 
-  return NULL;
-  }
-  }
+// remove the dirent from the parent dir
+static int remove_dirent(int parent_inode, int child_inode) {
+  /*
+  1. get parent's last dirent;
+  2. traverse and get the block offset for the target entry (check the inode)
+  3. replace the target entry
+  4. write back to disk
+  */
 
-  }
-*/
 
-/*
-  1. parse
-  2. open
-  3. write
-  4. open
-*/
+
+
+
+}
