@@ -30,6 +30,7 @@ enum fileseek {SEEKSET, SEEKCUR, SEEKEND};
 enum file_type{DIR, REG};
 enum table_level{NONE, DIRECT, I1, I2, I3};
 enum file_access {OPEN_W, OPEN_R, OPEN_A, OPEN_WR};
+enum permission {R, W, E, RW, RE, WE, RWE};
 // when access == OPEN_W and file exists, the file will be truncate
 
 /*

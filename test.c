@@ -23,7 +23,7 @@ int main() {
   printf("222222222: open dir result is %d\n", result);
   printf("\n\n\n");
   printf("________________________ f-OPEN ___________________\n\n");
-  int new_fd = f_open("home/rusr/haha.txt", OPEN_W);
+  int new_fd = f_open("home/rusr/haha.txt", OPEN_W, RWE);
   printf("_______end of fopen______________\n");
   printf("new file fd is %d\n", new_fd);
   printf("\n\n_______________________read new file dir\n\n");
@@ -35,10 +35,10 @@ int main() {
   f_close(new_fd);
 
   // second open
-  
+
 
   printf("________________________ f-OPEN 2222 ___________________\n\n");
-  int newnew_fd = f_open("home/rusr/haha.txt", OPEN_W);
+  int newnew_fd = f_open("home/rusr/haha.txt", OPEN_W, RWE);
   printf("_______end of fopen______________\n");
   printf("new file fd is %d\n", newnew_fd);
   printf("\n\n_______________________read new file dir\n\n");
@@ -63,6 +63,7 @@ int main() {
 
   printf("\n\n\n________+++++++++++++ f_read _________________\n");
   int result_buffer[WRITEBYTE];
+  bzero(result_buffer, WRITEBYTE);
   f_seek(newnew_fd, 0, SEEKSET);
 
   f_read(result_buffer,WRITEBYTE * 4, newnew_fd);
@@ -71,7 +72,7 @@ int main() {
     if(result_buffer[i] != i) {
       printf("read buffer %d differes: %d", i,result_buffer[i]);
     }
-     //printf("%d ", result_buffer[i]);
+    printf("%d ", result_buffer[i]);
   }
 
   printf("++++++++++++++++ f_stat +++++++++++++++++++\n");

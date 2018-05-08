@@ -47,7 +47,7 @@ static void update_ft(struct file_table_entry* new_entry, int new_index);
 static void free_parse(char**);
 /*** create a new reg or dir file, return the new file inode index ***/
 /*** 'newfile_name' is relative path ***/
-static int create_file(int parent_fd, char* newfile_name, int type);
+static int create_file(int parent_fd, char* newfile_name, int type, int permission);
 static void write_newinode(struct inode* new_file_inode, int new_inode_index, int parent_inode, int type);
 static struct table* get_tables(struct file_table_entry* en, struct table* t);
 static int get_next_boffset(struct table* t, struct file_table_entry* en);
@@ -1005,7 +1005,7 @@ int f_rewind(int fd) {
 }
 
 
-int f_open(char* filepath, int access) {
+int f_open(char* filepath, int access, int mode) {
   if(!(access == OPEN_W || access == OPEN_R  || access == OPEN_A || access == OPEN_WR)) {
     printf("f_open:     Invalid access input\n");
     return FAIL;
@@ -1065,6 +1065,15 @@ int f_open(char* filepath, int access) {
       return FAIL;
     } else {
       if(access == OPEN_R || access == OPEN_A || access == OPEN_WR) {
+        struct inode* target_inode = (struct inode*)(cur_disk.inodes + target_file->inode_index);
+        // check permission
+        int check = check_permission(target_inode, access);
+        if (check == FAIL) {
+          printf("f_open:     permission denied.\n");
+          free_parse(parse_path);
+          free(target_file);
+          return FAIL;
+        }
         struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
         printf("fopen: 7:     return value fd is %d\n", openfile->fd);
         free(target_file);
@@ -1076,7 +1085,7 @@ int f_open(char* filepath, int access) {
         printf("f_open:     88:       rrrrremove and ccccccreating new file\n");
         int removeres = f_remove(filepath);
         assert(removeres == SUCCESS);
-        int new_file_inode = create_file(parent_fd, prevdir, REG);
+        int new_file_inode = create_file(parent_fd, prevdir, REG, mode);
         struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
         free(target_file);
         return new_entry->fd;
@@ -1103,7 +1112,7 @@ int f_open(char* filepath, int access) {
     }
 
     printf("f_open:     8:       ccccccreating new file\n");
-    int new_file_inode = create_file(parent_fd, prevdir, REG);
+    int new_file_inode = create_file(parent_fd, prevdir, REG, mode);
     struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
     free(target_file);
     return new_entry->fd;
@@ -1300,6 +1309,25 @@ int f_close(int fd) {
   return SUCCESS;
 }
 
+int f_closedir(int dir_fd) {
+  struct file_table_entry* entry = open_ft->entries[dir_fd];
+  // check if not a DIR file
+  if(entry->type != DIR) {
+    printf("f_closedir:     Cannot close a regular file with 'f_closedir'\n");
+    return FAIL;
+  }
+  // check if have open files
+  if(entry->open_num > 0) {
+    printf("f_closedir:     Cannot close a directory containing opened files\n");
+    return FAIL;
+  }
+  printf("f_closedir:   closing directory %s\n", entry->filepath);
+  f_close(dir_fd);
+  printf("f_closedir: end of calling 'f_close'\n");
+  return SUCCESS;
+}
+
+//int f_mkdir(char* filepath, int mode)
 /*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
@@ -1460,7 +1488,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
 }
 
 
-static int create_file(int parent_fd, char* newfile_name, int type){
+static int create_file(int parent_fd, char* newfile_name, int type, int permission){
   printf("____________ creating file creating %s in parent fd %d __________\n", newfile_name, parent_fd);
   struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
   printf("___________creating file: parent filepaht is %s\n", parent_entry->filepath);
@@ -1478,6 +1506,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   struct inode* new_file_inode = (struct inode*)(cur_disk.inodes + new_inode_index * INODE_SIZE);
   cur_disk.sb.free_inode_head = new_file_inode->next_free_inode;
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
+  new_file_inode->permissions = permission;
   // need to write new entries into the parent directory file
   // needs to seek to the parent file end!!!!!!!!!!!!!!!!!!!
   write_disk_inode();
@@ -1486,6 +1515,7 @@ static int create_file(int parent_fd, char* newfile_name, int type){
   int seek_res = f_seek(parent_fd, 0, SEEKEND);
   printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
   struct dirent new_dirent;
+  bzero(&new_dirent, sizeof(struct dirent));
   new_dirent.type = REG;
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
@@ -1731,7 +1761,8 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
         printf("same table table level %d and table offset %d and index in table %d contains value: %d\n", t->table_level, tableoffset, t->intable_index, t->cur_data_table[t->intable_index]);
         int table_fileOffset = cur_disk.data_region_offset + tableoffset * BLOCKSIZE;
         lseek(cur_disk.diskfd, table_fileOffset, SEEK_SET);
-        if(write(cur_disk.diskfd, t->cur_data_table, BLOCKSIZE) != BLOCKSIZE) {
+        void* buffer = (void*)(t->cur_data_table);
+        if(write(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
           printf("get_next_offset:    2:  update index table failed\n");
           return FAIL;
         }
@@ -1760,7 +1791,8 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
       printf("first ___Iblocks___ data table offset is %d\n", new_table_offset);
       node->iblocks[0] = new_table_offset;
 
-      int* new_table = (int*)malloc(BLOCKSIZE);
+      int* new_table = malloc(BLOCKSIZE);
+      bzero(new_table, BLOCKSIZE);
       int new_data_offset = get_next_freeOffset();
       if(new_data_offset == FAIL) {
         free(new_table);
@@ -1823,10 +1855,11 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
         }
 
         int* new_table = (int*)malloc(BLOCKSIZE);
+        bzero(new_table, BLOCKSIZE);
         new_table[0] = new_data_offset;
         int fileoffset = cur_disk.data_region_offset + new_table_offset * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
-        if(write(cur_disk.diskfd, new_table, BLOCKSIZE) != BLOCKSIZE) {
+        if(write(cur_disk.diskfd, (void*)new_table, BLOCKSIZE) != BLOCKSIZE) {
           free(new_table);
           printf("Get next boffset:   2:  write new table block failed\n");
           return FAIL;
@@ -1839,6 +1872,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
         t->cur_table_size = TABLE_ENTRYNUM;
         //t->level_one = node->iblocks;
         //t->level_one_index = 0;
+        t->level_two = malloc(BLOCKSIZE);
         memcpy(t->level_two, new_table, BLOCKSIZE);
         t->level_two_index = 0;
         t->level_three = NULL;
@@ -1881,6 +1915,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
           // write first level
           //void* buffer = malloc(BLOCKSIZE);
           int* level1 = (int*)malloc(BLOCKSIZE);
+          bzero(level1, BLOCKSIZE);
           level1[0] = i2block_offset;
           int fileoffset = cur_disk.data_region_offset + i2 * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -1896,6 +1931,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
           // write second level
 
           int* level2 = (int*)malloc(BLOCKSIZE);
+          bzero(level2, BLOCKSIZE);
           level2[0] = i2data_offset;
           fileoffset = cur_disk.data_region_offset + i2block_offset * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -1939,6 +1975,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
           }
 
           int* level2 = (int*)malloc(BLOCKSIZE);
+          bzero(level2, BLOCKSIZE);
           level2[0] = i2data_offset;
           fileoffset = cur_disk.data_region_offset + i2block_offset * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -1992,6 +2029,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
         // write first level
         int* level1 = (int*)malloc(BLOCKSIZE);
+        bzero(level1, BLOCKSIZE);
         level1[0] = i3_level2;
         int fileoffset = cur_disk.data_region_offset + i3 * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2005,6 +2043,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
         // write second level
         int* level2 = (int*)malloc(BLOCKSIZE);
+        bzero(level2, BLOCKSIZE);
         level2[0] = i3_level3;
         fileoffset = cur_disk.data_region_offset + i3_level2 * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2018,6 +2057,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
         // write third level
         int* level3 = (int*)malloc(BLOCKSIZE);
+        bzero(level3, BLOCKSIZE);
         level3[0] = new_data_offset;
         fileoffset = cur_disk.data_region_offset + i3_level3 * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2064,6 +2104,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
           // write level 2
           int* level2 = (int*)malloc(BLOCKSIZE);
+          bzero(level2, BLOCKSIZE);
           level2[0] = i3_level3;
           fileoffset = cur_disk.data_region_offset + i3_level2 * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2078,6 +2119,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
           //write level 3
           int* level3 = (int*)malloc(BLOCKSIZE);
+          bzero(level3, BLOCKSIZE);
           level3[0] = new_data_offset;
           fileoffset = cur_disk.data_region_offset + i3_level3 * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2119,6 +2161,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
           }
           // write new level3
           int* level3 = (int*)malloc(BLOCKSIZE);
+          bzero(level3, BLOCKSIZE);
           level3[0] = new_data_offset;
           fileoffset = cur_disk.data_region_offset + i3level3 * BLOCKSIZE;
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -2335,6 +2378,25 @@ static int remove_dirent(int parent_fd, int parent_inode, int child_inode) {
   get_tables(parent_entry, datatable);
   parentinode->last_block_offset = datatable->cur_data_table[datatable->intable_index];
 
+}
 
-
+int check_permission(struct inode* target, int access) {
+  if(target->permissions == R) {
+    if(access != OPEN_R) {
+      return FAIL;
+    }
+  }
+  if(target->permissions == E) {
+    return FAIL;
+  }
+  if(target->permissions == RE) {
+    if(access == OPEN_W || access == OPEN_WR) {
+      return FAIL;
+    }
+  }
+  if(target->permissions == WE) {
+    if(access == OPEN_R || access == OPEN_WR) {
+      return FAIL;
+    }
+  }
 }
