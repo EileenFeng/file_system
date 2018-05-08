@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <assert.h>
 #include "fs_struct.h"
 #include "file_lib.h"
 
@@ -378,7 +379,7 @@ int f_remove(char* filepath) {
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
   printf("f_remove: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
-
+  printf("f-remove 5555 after checkdir\n");
   // cannot remove a not existing file
   if(target_file == NULL) {
     printf("f_remove:   6:    Cannot remove a file that does not exist. \n");
@@ -409,9 +410,10 @@ int f_remove(char* filepath) {
   // 1. free all the data blocks along the way
   int filesize = target->size;
   int* block_buffer = (int*)malloc(BLOCKSIZE);
-
+  printf("f_remove:     ssssssssize %d\n", filesize);
   // free dblocks
   if(filesize > 0) {
+    printf("f_remove        direct       size %d\n", filesize);
     for(int i = 0; i < N_DBLOCKS; i ++) {
       if(filesize > 0) {
         printf("f_remove:     1; free direct blocks, cur filesize %d\n", filesize);
@@ -421,6 +423,7 @@ int f_remove(char* filepath) {
         bzero(block_buffer, BLOCKSIZE);
         block_buffer[0] = oldhead;
         cur_disk.sb.free_block_head = block_offset;
+        printf("f_remove: DIRECT     after add free head is %d\n", cur_disk.sb.free_block_head);
         int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
@@ -471,6 +474,7 @@ int f_remove(char* filepath) {
       bzero(block_buffer, BLOCKSIZE);
       block_buffer[0] = oldhead;
       cur_disk.sb.free_block_head = datatable_offset;
+      printf("f_remove: I11NDIRECT     after add free head is %d\n", cur_disk.sb.free_block_head);
       fileoffset = cur_disk.data_region_offset + datatable_offset* BLOCKSIZE;
       lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
@@ -493,6 +497,8 @@ int f_remove(char* filepath) {
         block_buffer[0] = oldhead;
         cur_disk.sb.free_block_head = block_offset;
         int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+        printf("f_remove: 2; inderiect      after add free head is %d\n", cur_disk.sb.free_block_head);
+
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free data block in indblocks failed\n");
@@ -545,6 +551,7 @@ int f_remove(char* filepath) {
     block_buffer[0] = oldhead;
     cur_disk.sb.free_block_head = target->i2block;
     lseek(cur_disk.diskfd, i2offset, SEEK_SET);
+    printf("f_remove: I2 offset %d     after add free head is %d\n", i2offset, cur_disk.sb.free_block_head);
     if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
       printf("f_remove:     free i2offset in i2dblocks failed\n");
       free(block_buffer);
@@ -562,6 +569,7 @@ int f_remove(char* filepath) {
       int levelone_index = levelone[i];
       int datatable_offset = cur_disk.data_region_offset + levelone_index * BLOCKSIZE;
       lseek(cur_disk.diskfd, datatable_offset, SEEK_SET);
+      printf("f_remove: DIRECT     after add free head is %d\n", cur_disk.sb.free_block_head);
       bzero(leveltwo, BLOCKSIZE);
       if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:   read in LEVEL TWO data table failed in i2block\n");
@@ -580,6 +588,7 @@ int f_remove(char* filepath) {
       block_buffer[0] = oldhead;
       cur_disk.sb.free_block_head = levelone[i];
       lseek(cur_disk.diskfd, datatable_offset, SEEK_SET);
+      printf("f_remove:   i2block     after add free head is %d and one after %d, \n", cur_disk.sb.free_block_head, block_buffer[0]);
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     free levelone[i] in indblocks failed\n");
         free(block_buffer);
@@ -596,12 +605,14 @@ int f_remove(char* filepath) {
         if(filesize <= 0) {
           break;
         }
-        int block_offset = leveltwo[i];
+        int block_offset = leveltwo[j];
+        printf("f_remove : I22 current block offset to free %d\n", block_offset);
         int oldhead = cur_disk.sb.free_block_head;
         bzero(block_buffer, BLOCKSIZE);
         block_buffer[0] = oldhead;
         cur_disk.sb.free_block_head = block_offset;
         int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
+        printf("f_remove: I2     after add free head is %d\n", cur_disk.sb.free_block_head);
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free data block in level2 dblocks failed\n");
@@ -1063,7 +1074,8 @@ int f_open(char* filepath, int access) {
         //f_remove
 
         printf("f_open:     88:       rrrrremove and ccccccreating new file\n");
-        f_remove(filepath);
+        int removeres = f_remove(filepath);
+        assert(removeres == SUCCESS);
         int new_file_inode = create_file(parent_fd, prevdir, REG);
         struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
         free(target_file);
@@ -1163,7 +1175,7 @@ int f_write(void* buffer, int bsize, int fd) {
 
       if(writeto->block_offset == write_inode->last_block_offset) {
         int last_inblock_offset = write_inode->size % BLOCKSIZE;
-        printf("f_write:   Old in block offset data for inode %d and size %d\n", last_inblock_offset, write_inode->size);
+        printf("f_write:   Old in block offset data for offset %d and size %d\n", last_inblock_offset, write_inode->size);
         if(writeto->offset + cur_write_bytes > last_inblock_offset) {
           write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
           printf("f_write:   after update in 1 new size %d\n", write_inode->size);
@@ -1330,6 +1342,7 @@ static void free_parse(char** parse_result) {
 }
 
 static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
+  f_seek(parentdir_fd, 0, SEEKSET);
   printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
   //printf("checkdir getting fd %d origin is  NULL? %d\n", parentdir_fd, origin==NULL);
@@ -1789,8 +1802,8 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
 
     int new_i2 = FALSE;
     if(t->table_level == I1) {
-      printf("In I2  \t\t\tCreating table \n");
-      if(t->level_one_index == N_IBLOCKS - 1 && t->level_two_index == TABLE_ENTRYNUM - 1) {
+      printf("In I1  \t\t\tCreating table levelone index %d and level two %d\n",t->level_one_index, t->level_two_index );
+      if(t->level_one_index == N_IBLOCKS - 1) {
         //t->table_level = I2;
         printf("Finished IIIII1111 moving to _________2_________\n");
         new_i2 = TRUE;

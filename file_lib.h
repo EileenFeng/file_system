@@ -4,15 +4,15 @@
 
 // library functions
 int f_mount(char* sourcepath); //done
-int f_open(char* filepath, int access); // partially done, need to handle access (write remove)
+int f_open(char* filepath, int access); // done
 int f_write(void* buffer, int bsize, int fd); // done NEED TO TEST
-int f_read(void* buffer, int bsize, int fd);
+int f_read(void* buffer, int bsize, int fd); // done
 int f_close(int fd); //done
-int f_remove(char* filepath);
+int f_remove(char* filepath); // done
 
 
 int f_rewind(int fd); //done
-int f_stat(int fd, struct fStat* st);
+int f_stat(int fd, struct fStat* st); //done
 /*  when SEEK_END, seek backwards */
 int f_seek(int fd, int offset, int whence); // done
 
@@ -20,6 +20,23 @@ int f_seek(int fd, int offset, int whence); // done
 int f_opendir(char* filepath); //done
 struct dirent* f_readdir(int dir_fd); //done // malloced result
 
+/*
+f_closedir
+:  close an open directory file
+12.
+f_mkdir
+:  make a new directory at the specified location
+13.
+f_rmdir
+:  delete a specified directory.  Be sure to remove entire contents and the contents of
+all subdirectorys from the filesystem.  Do NOT simply remove pointer to directory.
+14.
+f_mount
+:  mount a specified file system into your directory tree at a specified location.
+15.
+f_umount
+:  unmount a specified file system
 
+*/
 
 #endif
