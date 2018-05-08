@@ -57,7 +57,7 @@ static int write_disk_sb();
 // write inodes back to disk
 static int write_disk_inode();
 // remove the dirent from the parent dir
-static int remove_dirent(int parent_inode, int child_inode);
+static int remove_dirent(int parent_fd, int parent_inode, int child_inode);
 // free the inode
 static int free_inode(int inode_index);
 /************************ LIB FUNCTIONS *****************************/
@@ -440,7 +440,7 @@ int f_remove(char* filepath) {
   }
   // if filesize < 0 after dblocks, return the inode to free inodes
   if(filesize <= 0) {
-    remove_dirent(target->parent_inode, target->inode_index);
+    remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
     free(block_buffer);
     return SUCCESS;
@@ -513,7 +513,7 @@ int f_remove(char* filepath) {
 
   // if filesize < 0 after iblocks, return the inode to free inodes
   if(filesize <= 0) {
-    remove_dirent(target->parent_inode, target->inode_index);
+    remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
     free(parse_path);
     free(target_file);
@@ -624,7 +624,7 @@ int f_remove(char* filepath) {
 
   // if filesize < 0 after i2blocks, return the inode to free inodes
   if(filesize <= 0) {
-    remove_dirent(target->parent_inode, target->inode_index);
+    remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
     free(parse_path);
     free(target_file);
@@ -786,7 +786,7 @@ int f_remove(char* filepath) {
 
   // if filesize < 0 after i22blocks, return the inode to free inodes
   if(filesize <= 0) {
-    remove_dirent(target->parent_inode, target->inode_index);
+    remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
     free(parse_path);
     free(target_file);
@@ -1024,12 +1024,12 @@ int f_open(char* filepath, int access) {
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
-    printf("f_open:     2:      parent path for fopen is: %s\n", parent_path);
     prevdir = curdir;
     curdir = parse_path[count];
     if(curdir == NULL){
       break;
     }
+    printf("f_open:     2:      parent path for fopen is: %s\n", parent_path);
     parent_fd = f_opendir(parent_path);
     if(parent_fd == FAIL) {
       printf("f_open: Directory %s along the way does not exists\n", parent_path);
@@ -1041,10 +1041,12 @@ int f_open(char* filepath, int access) {
   printf("f_open:  4:     parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
   printf("f_open: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  f_seek(parent_fd, 0, SEEK_SET);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
 
   // if file exists
   if (target_file != NULL) {
+    printf("fopen:    pre66: file %s eixsts\n", prevdir);
     if(target_file->type != REG) {
       printf("fopen: 6;     file %s is not a regular file\n", prevdir);
       free_parse(parse_path);
@@ -1059,11 +1061,21 @@ int f_open(char* filepath, int access) {
       } else if (access == OPEN_W) {
         // needs to remove the file and open and new one;
         //f_remove
+
+        printf("f_open:     88:       rrrrremove and ccccccreating new file\n");
+        f_remove(filepath);
+        int new_file_inode = create_file(parent_fd, prevdir, REG);
+        struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
+        free(target_file);
+        return new_entry->fd;
+        /*
         printf("need to remove first but now just return\n");
         struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
         printf("fopen: 7:     return value fd is %d\n", openfile->fd);
         free(target_file);
         return openfile->fd;
+        */
+
       }
     }
 
@@ -1151,7 +1163,7 @@ int f_write(void* buffer, int bsize, int fd) {
 
       if(writeto->block_offset == write_inode->last_block_offset) {
         int last_inblock_offset = write_inode->size % BLOCKSIZE;
-        printf("f_write:   Old in block offset data for inode %d and size \n", last_inblock_offset, write_inode->size);
+        printf("f_write:   Old in block offset data for inode %d and size %d\n", last_inblock_offset, write_inode->size);
         if(writeto->offset + cur_write_bytes > last_inblock_offset) {
           write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
           printf("f_write:   after update in 1 new size %d\n", write_inode->size);
@@ -1340,12 +1352,13 @@ static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
       printf("+++++++++++++----- checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
       return temp;
     }
-    free(temp);
     printf(" checkdir exists:   %s not match assigning new dirent\n", temp->filename);
+    free(temp);
     temp = f_readdir(parentdir_fd);
     printf("checkdir exists after assign temp\n");
   }
   printf("?????? ----- org_block_offset %d\n", org_block_offset);
+  printf("Checkdir:  %s does not exists in %s\n", target, origin->filepath);
   origin->offset = org_offset;
   origin->block_index = org_block_index;
   origin->block_offset = org_block_offset;
@@ -2269,15 +2282,45 @@ static int free_inode(int inode_index) {
 }
 
 // remove the dirent from the parent dir
-static int remove_dirent(int parent_inode, int child_inode) {
+static int remove_dirent(int parent_fd, int parent_inode, int child_inode) {
   /*
   1. get parent's last dirent;
   2. traverse and get the block offset for the target entry (check the inode)
   3. replace the target entry
   4. write back to disk
   */
-
-
+  struct inode* parentinode = (struct inode*)(cur_disk.inodes + parent_inode * INODE_SIZE);
+  struct file_table_entry* parent_entry = open_ft->entries[parent_fd];
+  int new_size = parentinode->size - sizeof(struct dirent);
+  // read in all the dirent
+  f_seek(parent_fd, 0, SEEKSET);
+  char buffer[parentinode->size];
+  f_read((void*)buffer, parentinode->size, parent_fd);
+  // find the target, and update with the last one, if last one is the target, then do nothing
+  struct dirent* cur = (struct dirent*)buffer;
+  struct dirent* end = (struct dirent*)(buffer + new_size);
+  int dirent_num = parentinode->size / sizeof(struct dirent);
+  for(int i = 0; i < dirent_num; i++) {
+    if(cur->inode_index == child_inode) {
+      if(i != dirent_num - 1) {
+        memcpy(cur, end, sizeof(struct dirent));
+        break;
+      } else {
+        cur ++;
+        break;
+      }
+    }
+  }
+  f_seek(parent_fd, 0, SEEKSET);
+  f_write((void*)buffer, new_size, parent_fd);
+  // update file size to oldsize - sizeof(dirent), update last block offset of inode
+  parentinode->size -= sizeof(struct dirent);
+  printf("Remove_dirent:     before seek\n");
+  f_seek(parent_fd, new_size, SEEKSET);
+  printf("Remove_dirent:     after seek\n");
+  struct table* datatable = malloc(sizeof(struct table));
+  get_tables(parent_entry, datatable);
+  parentinode->last_block_offset = datatable->cur_data_table[datatable->intable_index];
 
 
 
