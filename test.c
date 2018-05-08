@@ -32,15 +32,29 @@ int main() {
   printf("________________________ f-OPEN 2222 ___________________\n\n");
   int newnew_fd = f_open("home/rusr/haha.txt", OPEN_W);
   printf("_______end of fopen______________\n");
-  printf("new file fd is %d\n", new_fd);
+  printf("new file fd is %d\n", newnew_fd);
   printf("\n\n_______________________read new file dir\n\n");
   //  int again = f_open("home/rusr/hahaha.txt", "");
   //printf("again %d\n", again);
   f_seek(result, 0, SEEKSET);
   rusrdir = f_readdir(result);
-  printf("should: %s\n", rusrdir->filename);               
-  //  struct dirent* againn  = f_readdir(result);
-  //printf("and again %s\n", againn->filename);
-  //f_open("/home/eileen/haha/lol.txt", "dajs");
-
+  printf("should: %s\n", rusrdir->filename);
+  int* buffer = (int*)malloc(516);
+  for(int i = 0; i < 129; i++) {
+    buffer[i] = i;
+  }
+  /*
+  printf("\n\n\n____________========= f_write -_________________-\n");
+  int write_result = f_write((void*)buffer, 516, newnew_fd);
+  printf(" write result %d\n", write_result);
+  printf("___________________________ end of f_write ___________\n\n");
+  printf("\n\n\n________+++++++++++++ f_read _________________\n");
+  int* result_buffer = (int*)malloc(516);
+  f_seek(newnew_fd, 0, SEEKSET);
+  f_read(result_buffer, 516, newnew_fd);
+  for(int i = 0; i < 129; i++) {
+    printf("read buffer %d\n", i);
+    printf("%d\n", result_buffer[i]);
+  }
+  */
 }

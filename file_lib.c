@@ -133,6 +133,7 @@ int f_mount(char* sourcepath) {
   //update open file table
   int temp_index = MAX_OPENFILE - open_ft->free_fd_num;
   root_entry->fd = open_ft->free_id[temp_index];
+  open_ft->free_id[temp_index] = UNDEFINED;
   cur_disk.rootdir_fd = root_entry->fd;
   printf("fd for root directory is %d\n", root_entry->fd);
   update_ft(root_entry, temp_index);
@@ -1243,6 +1244,7 @@ int f_close(int fd) {
   open_ft->free_id[fd] = fd;
   open_ft->free_fd_num ++;
   open_ft->filenum ++;
+  open_ft->entries[fd] = NULL;
   return SUCCESS;
 }
 
@@ -1358,6 +1360,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
     if(temp == NULL) {
       continue;
     }
+    printf("create entry: \t checking entry with fd %d\n", temp->fd);
     if(strcmp(temp->filepath, resultpath) == SUCCESS) {
       printf("Create entry: file %s already OPENED!!!!\n", resultpath);
       return temp;
@@ -1393,7 +1396,9 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   printf("create entry: childname is %s child inode is %d, blockoffset is %d\n", result->filepath, result->inode_index, result->block_offset);
   // assigning fd
   int freefd_index = get_free_fd_index();
+  printf("freeeeee entry is %d\n", freefd_index);
   result->fd = open_ft->free_id[freefd_index];
+  open_ft->free_id[freefd_index] = UNDEFINED;
   update_ft(result, freefd_index);
   parent_entry->open_num ++;
   return result;
