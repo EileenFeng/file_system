@@ -1,0 +1,16 @@
+# !/bin/bash
+
+echo "compile following test cases"
+echo $(find . -type f -name "test*.c")
+echo "----------------------------"
+for file in $(find . -type f -name "test*.c")
+do
+	gcc -g -Wall ${file:2} libfilesys.so -o $(echo ${file:2} | cut -f 1 -d '.') 
+done
+
+#case $1 in
+#	"clean")
+#	echo "cleaning following binaries"
+#	echo $(find . -type f -executable -name "test*")
+#	rm $(find . -type f -executable -name "test*")
+#esac
