@@ -47,21 +47,22 @@ int main() {
   }
   f_seek(newnew_fd, 0, SEEKSET);
   printf("\n\n\n____________========= f_write -_________________-\n");
-  int write_result = f_write((void*)buffer, 512, newnew_fd);
+  int write_result = f_write((void*)buffer,WRITEBYTE, newnew_fd);
   printf(" write result %d\n", write_result);
   printf("___________________________ end of f_write ___________\n\n");
 
-  /*
+   
   printf("\n\n\n________+++++++++++++ f_read _________________\n");
   int result_buffer[WRITEBYTE];
   f_seek(newnew_fd, 0, SEEKSET);
   
-  f_read(result_buffer, WRITEBYTE, newnew_fd);
-  for(int i = 0; i < WRITEBYTE; i++) {
-    printf("read buffer %d\n", i);
-     printf("%d\n", result_buffer[i]);
+  f_read(result_buffer,WRITEBYTE, newnew_fd);
+  for(int i = 0; i < WRITEBYTE / 4; i++) {
+    //    printf("read buffer %d: ", i);
+     printf("%d ", result_buffer[i]);
   }
-  */
+ 
+  
   
   
 }
