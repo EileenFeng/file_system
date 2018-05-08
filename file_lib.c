@@ -1327,7 +1327,65 @@ int f_closedir(int dir_fd) {
   return SUCCESS;
 }
 
-//int f_mkdir(char* filepath, int mode)
+int f_mkdir(char* filepath, int mode) {
+  char** parse_path = parse_filepath(filepath);
+  int count = 0;
+  char* prevdir = NULL;
+  char* curdir = parse_path[count];
+  int parent_fd = cur_disk.rootdir_fd;
+  char parent_path[MAX_LENGTH];
+  strcpy(parent_path, "");
+
+  // check whether directories along the filepath exists
+  while(curdir != NULL) {
+    printf("f_mkdir:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
+    // get complete path
+    if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
+      free_parse(parse_path);
+      printf("f_mkdir: filepath invalid: file path too long\n");
+      return FAIL;
+    }
+    //if(parent_fd != cur_disk.rootdir_fd){
+    strcat(parent_path, "/");
+    //}
+    strcat(parent_path, curdir);
+    // check if parent directory exists
+    count ++;
+    prevdir = curdir;
+    curdir = parse_path[count];
+    if(curdir == NULL){
+      break;
+    }
+    printf("f_mkdir:     2:      parent path for fopen is: %s\n", parent_path);
+    parent_fd = f_opendir(parent_path);
+    if(parent_fd == FAIL) {
+      printf("f_mkdir: Directory %s along the way does not exists\n", parent_path);
+      free_parse(parse_path);
+      return FAIL;
+    }
+    printf("f_mkdir:   3:     parent_fd is %d\n", parent_fd);
+  }
+  printf("f_mkdir:  4:     parent fd is %d\n", parent_fd);
+  // now prevdir contains the file to be OPENED, parent dir is the parent Directory
+  printf("f_mkdir: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
+  f_seek(parent_fd, 0, SEEK_SET);
+  struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
+  if(target_file != NULL) {
+    if(target_file->type == DIR) {
+      printf("f_mkdir:      directory already exists\n");
+      free(target_file);
+      return FAIL;
+    } else {
+      int new_index = create_file(parent_fd, prevdir, DIR, mode);
+      free(target_file);
+      return new_index;
+    }
+  }
+  int new_index = create_file(parent_fd, prevdir, DIR, mode);
+  free(target_file);
+  return new_index;
+
+}
 /*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
