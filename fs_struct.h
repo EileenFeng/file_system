@@ -1,5 +1,5 @@
-#define N_DBLOCKS 4
-#define N_IBLOCKS 8
+#define N_DBLOCKS 8
+#define N_IBLOCKS 4
 #define BLOCKNUM 17408
 #define TESTNUM 20
 #define UNDEFINED -10
