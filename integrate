@@ -1,5 +1,7 @@
 # !/bin/bash
-
+rm DISK
+echo "remove DISK"
+echo $(./format)
 echo "compile following test cases"
 echo $(find . -type f -name "test*.c")
 echo "----------------------------"
