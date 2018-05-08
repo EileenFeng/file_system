@@ -826,16 +826,19 @@ int f_read(void* buffer, int bsize, int fd) {
     }
     entry->offset += bsize;
     return bsize;
-  } 
+  }
+  printf("f_read: hard case\n");
 
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   get_tables(entry, datatable);
   int end_offset = (BLOCKSIZE - entry->offset) % BLOCKSIZE;
   int bytes_toread = bsize;
   while(bytes_toread > 0) {
+    printf("Currently block offset %d  and offset %d and index %d\n", entry->block_offset, entry->offset, entry->block_index);
     int fileoffset = cur_disk.data_region_offset + entry->block_offset * BLOCKSIZE + entry->offset;
     lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
     void* cur_buffer = buffer + (bsize - bytes_toread);
+    printf("currrently reading %d bytes with remaining %d bytes\n", bsize - bytes_toread, bytes_toread);
     if(bytes_toread >= BLOCKSIZE - entry->offset) {
       int cur_read = BLOCKSIZE - entry->offset;
       if(read(cur_disk.diskfd, cur_buffer, cur_read) != cur_read) {
@@ -845,6 +848,7 @@ int f_read(void* buffer, int bsize, int fd) {
       }
       get_next_boffset(datatable, entry);
       entry->offset = 0;
+      bytes_toread -= BLOCKSIZE;
     } else {
       entry->offset += bytes_toread;
       if(read(cur_disk.diskfd, cur_buffer, bytes_toread) != bytes_toread) {
@@ -897,9 +901,10 @@ int f_seek(int fd, int offset, int whence) {
     } else {
       entry->block_index = offset / BLOCKSIZE;
       entry->offset = offset % BLOCKSIZE;
-      if(offset == entry->block_index * BLOCKSIZE + entry->offset) {
+      /*if(offset == entry->block_index * BLOCKSIZE + entry->offset) {
         return SUCCESS;
       }
+      */
       struct table* datatable = (struct table*)malloc(sizeof(struct table));
       get_tables(entry, datatable);
       if(datatable->table_level == NONE) {
@@ -1087,7 +1092,12 @@ int f_open(char* filepath, int access) {
 
 int f_write(void* buffer, int bsize, int fd) {
   struct file_table_entry* writeto = open_ft->entries[fd];
+  if(writeto == NULL) {
+    printf("f_write:    invalid file descriptor\n");
+  }
+  printf("w1\n");
   struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
+  printf("w2\n"); 
   // invalid fd
   if(writeto == NULL) {
     printf("f_write: invalid fd\n");
@@ -1119,12 +1129,16 @@ int f_write(void* buffer, int bsize, int fd) {
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   datatable = get_tables(writeto, datatable);
   int byte_to_write = bsize;
+  
   while(byte_to_write > 0) {
+    printf("f_write ::::::: currently writing block offset %d with offset %d\n", writeto->block_offset, writeto->offset);
     int fileOffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
     lseek(cur_disk.diskfd, fileOffset, SEEK_SET);
+
     if(byte_to_write >= BLOCKSIZE - writeto->offset) {
       int cur_write_bytes = BLOCKSIZE - writeto->offset;
       void* cur_write = buffer + (bsize - byte_to_write);
+      printf("f_write:    larger than block currently writing %d bytes with fle offset %d\n", cur_write_bytes, fileOffset);
       if(write(cur_disk.diskfd, cur_write, cur_write_bytes) != cur_write_bytes) {
         printf("f_write: writing %d byte failed\n", bsize - byte_to_write);
         free_struct_table(datatable);
@@ -1146,7 +1160,7 @@ int f_write(void* buffer, int bsize, int fd) {
       struct dirent* temp = (struct dirent*)cur_buffer;
       printf("fwriteL hahahhaha buffer: %s\n", temp->filename);
 
-      printf("f_write:     cur data block index %d offset %d\n", writeto->block_index, writeto->offset);
+      printf("f_write:     cur data block offset %d offset %d\n", writeto->block_offset, writeto->offset);
       printf("f_write:   bsize %d     cur_write_bytes is %d\n", bsize, cur_write_bytes);
       int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
       lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
@@ -1159,7 +1173,7 @@ int f_write(void* buffer, int bsize, int fd) {
         int last_inblock_offset = write_inode->size % BLOCKSIZE;
         if(writeto->offset + cur_write_bytes > last_inblock_offset) {
           write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
-        }
+	}
       }
       writeto->offset += byte_to_write;
       byte_to_write -= cur_write_bytes;
@@ -1169,6 +1183,7 @@ int f_write(void* buffer, int bsize, int fd) {
     }
   }
   write_disk_inode();
+  free_struct_table(datatable);
   return bsize;
 }
 
@@ -1401,6 +1416,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   open_ft->free_id[freefd_index] = UNDEFINED;
   update_ft(result, freefd_index);
   parent_entry->open_num ++;
+  open_ft->entries[result->fd] = result;
   return result;
 }
 
@@ -1652,27 +1668,32 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
       t->intable_index ++;
       // need to write this back to disk
       t->cur_data_table[t->intable_index] = new_datablock_offset;
-      int tableoffset = UNDEFINED;
-      if(t->table_level == I1) {
-        tableoffset = t->level_one_index;
-      } else if (t->table_level == I2) {
-        tableoffset = t->level_one_index;
-      } else if(t->table_level == I3) {
-        tableoffset = t->level_two_index;
-      }
-      // write the table data for the table back to disk
-      int table_fileOffset = cur_disk.data_region_offset + tableoffset * BLOCKSIZE;
-      lseek(cur_disk.diskfd, table_fileOffset, SEEK_SET);
-      if(write(cur_disk.diskfd, t->cur_data_table, BLOCKSIZE) != BLOCKSIZE) {
-        printf("get_next_offset:    2:  update index table failed\n");
-        return FAIL;
+      if(t->table_level != DIRECT) {
+	
+     
+	int tableoffset = UNDEFINED;
+	if(t->table_level == I1) {
+	  tableoffset = t->level_one_index;
+	} else if (t->table_level == I2) {
+	  tableoffset = t->level_one_index;
+	} else if(t->table_level == I3) {
+	  tableoffset = t->level_two_index;
+	}
+	// write the table data for the table back to disk
+	printf("get+next+boffset %d\n", tableoffset);
+	int table_fileOffset = cur_disk.data_region_offset + tableoffset * BLOCKSIZE;
+	lseek(cur_disk.diskfd, table_fileOffset, SEEK_SET);
+	if(write(cur_disk.diskfd, t->cur_data_table, BLOCKSIZE) != BLOCKSIZE) {
+	  printf("get_next_offset:    2:  update index table failed\n");
+	  return FAIL;
+	}
       }
       //update inode and write back to disk
       node->last_block_offset = new_datablock_offset;
       if(t->table_level == DIRECT) {
-        node->dblocks[t->intable_index] = new_datablock_offset;
+	node->dblocks[t->intable_index] = new_datablock_offset;
       }
-
+      write_disk_inode();
       return new_datablock_offset;
     } else {
       //need to create new data tables
@@ -2168,6 +2189,7 @@ static int write_disk_inode() {
     lseek(cur_disk.diskfd, BLOCKSIZE * 2, SEEK_SET);
     printf("writing inode\n");
     int size = (cur_disk.sb.data_offset - cur_disk.sb.inode_offset) * BLOCKSIZE;
+    printf("write inode: inode size is %d\n", size);
     if(write(cur_disk.diskfd, cur_disk.inodes, size) != size) {
         printf("Write_disk_inodes:  failed\n");
         return FAIL;

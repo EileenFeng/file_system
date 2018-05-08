@@ -42,19 +42,25 @@ int main() {
   int* buffer = (int*)malloc(516);
   for(int i = 0; i < 129; i++) {
     buffer[i] = i;
+    printf("%d ", i);
   }
-  /*
+  
   printf("\n\n\n____________========= f_write -_________________-\n");
-  int write_result = f_write((void*)buffer, 516, newnew_fd);
+  int write_result = f_write((void*)buffer, 512, newnew_fd);
   printf(" write result %d\n", write_result);
   printf("___________________________ end of f_write ___________\n\n");
+
+  
   printf("\n\n\n________+++++++++++++ f_read _________________\n");
   int* result_buffer = (int*)malloc(516);
   f_seek(newnew_fd, 0, SEEKSET);
-  f_read(result_buffer, 516, newnew_fd);
-  for(int i = 0; i < 129; i++) {
+  
+  f_read(result_buffer, 512, newnew_fd);
+  for(int i = 0; i < 128; i++) {
     printf("read buffer %d\n", i);
-    printf("%d\n", result_buffer[i]);
+     printf("%d\n", result_buffer[i]);
   }
-  */
+  
+  
+  
 }
