@@ -20,6 +20,7 @@ struct dirent* f_readdir(int dir_fd); //done // malloced result
 int f_closedir(int dir_fd);// need to test
 int f_mkdir(char* filepath, int mode); // done
 int f_rmdir(char* filepath);
+int f_unmount();
 /*
 f_closedir
 :  close an open directory file

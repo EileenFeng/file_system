@@ -195,6 +195,7 @@ int f_opendir(char* filepath) {
     printf("opendir: Next parent dir filepath is %s and fd is %d\n", new_entry->filepath, new_entry->fd);
     count ++;
     curdir = parse_path[count];
+    free(child_dirent);
   }
   printf("Opendir: return value is %d\n", parent_fd);
   return parent_fd;
@@ -1416,8 +1417,28 @@ int f_rmdir(char* filepath) {
   }
   f_rewind(dir_fd);
   f_remove(filepath, TRUE);
+  f_closedir(dir_fd);
 }
 
+int f_unmount() {
+  /*
+  1. free all entries int open file table
+  2. free open file table
+  */
+  printf("f_unmont:   Open file num %d\n", open_ft->filenum);
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    struct file_table_entry* temp = open_ft->entries[i];
+    if(temp != NULL) {
+      printf("%d Freeing ", i);
+      printf("%s\n",temp->filepath);
+      free(temp);
+      printf("%d after free!\n", i);
+    } else {
+      printf("%d is NULL\n", i);
+    }
+  }
+  free(open_ft);
+}
 
 /*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
@@ -2387,6 +2408,7 @@ static int get_next_freeOffset() {
   cur_disk.sb.free_block_head = oldhead->next_free;
   printf("getnextfree: \tnew free_block_head %d\n",cur_disk.sb.free_block_head);
   write_disk_sb();
+  free(buffer);
   return ret;
 }
 
