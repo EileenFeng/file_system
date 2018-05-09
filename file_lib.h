@@ -4,6 +4,8 @@
 
 // library functions
 int f_mount(char* sourcepath); //done
+int f_unmount();
+
 int f_open(char* filepath, int access, int mode); // done
 int f_read(void* buffer, int bsize, int fd); // done
 int f_write(void* buffer, int bsize, int fd); // done NEED TO TEST

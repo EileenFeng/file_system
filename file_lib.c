@@ -445,6 +445,7 @@ int f_remove(char* filepath, int empty_dir) {
   if(filesize <= 0) {
     remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
+    f_closedir(parent_fd);
     free(block_buffer);
     return SUCCESS;
   }
@@ -466,6 +467,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(parse_path);
         free(target_file);
         free(levelone);
+        f_closedir(parent_fd);
         return FAIL;
       }
 
@@ -483,6 +485,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(parse_path);
         free(target_file);
         free(levelone);
+        f_closedir(parent_fd);
         return FAIL;
       }
       write_disk_sb();
@@ -525,6 +528,7 @@ int f_remove(char* filepath, int empty_dir) {
     free(target_file);
     free(levelone);
     free(block_buffer);
+    f_closedir(parent_fd);
     return SUCCESS;
   }
 
@@ -542,6 +546,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(parse_path);
       free(target_file);
       free(block_buffer);
+      f_closedir(parent_fd);
       return FAIL;
     }
 
@@ -557,6 +562,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(block_buffer);
       free(parse_path);
       free(target_file);
+      f_closedir(parent_fd);
       return FAIL;
     }
     write_disk_sb();
@@ -579,6 +585,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(levelone);
         free(leveltwo);
         free(block_buffer);
+        f_closedir(parent_fd);
         return FAIL;
       }
 
@@ -596,6 +603,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(target_file);
         free(levelone);
         free(leveltwo);
+        f_closedir(parent_fd);
         return FAIL;
       }
       write_disk_sb();
@@ -621,6 +629,7 @@ int f_remove(char* filepath, int empty_dir) {
           free(block_buffer);
           free(levelone);
           free(leveltwo);
+          f_closedir(parent_fd);
           return FAIL;
         }
         filesize -= BLOCKSIZE;
@@ -642,6 +651,7 @@ int f_remove(char* filepath, int empty_dir) {
     free(levelone);
     free(leveltwo);
     free(block_buffer);
+    f_closedir(parent_fd);
     return SUCCESS;
   }
 
@@ -660,6 +670,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(parse_path);
       free(target_file);
       free(block_buffer);
+      f_closedir(parent_fd);
       return FAIL;
     }
 
@@ -677,6 +688,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(parse_path);
       free(target_file);
       free(block_buffer);
+      f_closedir(parent_fd);
       return FAIL;
     }
     write_disk_sb();
@@ -700,6 +712,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(leveltwo);
         free(levelthree);
         free(block_buffer);
+        f_closedir(parent_fd);
         return FAIL;
       }
 
@@ -717,6 +730,7 @@ int f_remove(char* filepath, int empty_dir) {
         free(levelone);
         free(leveltwo);
         free(levelthree);
+        f_closedir(parent_fd);
         return FAIL;
       }
       write_disk_sb();
@@ -739,6 +753,7 @@ int f_remove(char* filepath, int empty_dir) {
           free(leveltwo);
           free(levelthree);
           free(block_buffer);
+          f_closedir(parent_fd);
           return FAIL;
         }
 
@@ -756,6 +771,7 @@ int f_remove(char* filepath, int empty_dir) {
           free(levelone);
           free(leveltwo);
           free(levelthree);
+          f_closedir(parent_fd);
           return FAIL;
         }
         write_disk_sb();
@@ -780,6 +796,7 @@ int f_remove(char* filepath, int empty_dir) {
             free(levelone);
             free(leveltwo);
             free(levelthree);
+            f_closedir(parent_fd);
             return FAIL;
           }
           filesize -= BLOCKSIZE;
@@ -805,10 +822,11 @@ int f_remove(char* filepath, int empty_dir) {
     free(leveltwo);
     free(levelthree);
     free(block_buffer);
+    f_closedir(parent_fd);
     return SUCCESS;
   }
 
-  f_close(parent_fd);
+  //f_close(parent_fd);
   return FAIL;
   // need to close filepath
 }
@@ -1296,15 +1314,15 @@ int f_close(int fd) {
     printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
     return FAIL;
   }
-  printf("8\n");
+  printf("8 bfore close %s open num is %d\n", entry->filepath, open_ft->filenum);
   parent_entry->open_num --;
-  printf("9\n");
+  printf("9 after close %s open num is %d\n", entry->filepath, open_ft->filenum);
   free(entry);
   printf("10\n");
   // update file table
   open_ft->free_id[fd] = fd;
   open_ft->free_fd_num ++;
-  open_ft->filenum ++;
+  open_ft->filenum --;
   open_ft->entries[fd] = NULL;
   return SUCCESS;
 }
@@ -1416,6 +1434,25 @@ int f_rmdir(char* filepath) {
   }
   f_rewind(dir_fd);
   f_remove(filepath, TRUE);
+}
+
+int f_unmount() {
+  /*
+  1. free all entries int open file table
+  2. free open file table
+  */
+  printf("f_unmont:   Open file num %d\n", open_ft->filenum);
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    struct file_table_entry* temp = open_ft->entries[i];
+    if(temp != NULL) {
+      printf("%d Freeing %s\n", i, temp->filepath);
+      free(temp);
+      printf("%d after free!\n", i);
+    } else {
+      printf("%d is NULL\n", i);
+    }
+  }
+  free(open_ft);
 }
 
 
@@ -1542,8 +1579,9 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
 
   // create a new entry
   printf("create_entry:   _____ file %s not open ____ needs to open a new one\n", resultpath);
-  printf("create_entry: curparent is %s and number of open file%d\n", parent_entry->filepath, parent_entry->open_num);
+  printf("create_entry: curparent is %s and number of open file %d\n", parent_entry->filepath, parent_entry->open_num);
   struct file_table_entry* result = (struct file_table_entry*)malloc(sizeof(struct file_table_entry));
+  bzero(result, sizeof(struct file_table_entry));
   strcpy(result->filepath, resultpath);
   result->access = access;
   result->inode_index = child_inode;
@@ -1553,6 +1591,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   } else {
     result->open_num = UNDEFINED;
   }
+  printf("aaa1\n");
   if(access == OPEN_R || access == OPEN_W || access == OPEN_WR) {
     result->block_index = 0;
     result->offset = 0;
