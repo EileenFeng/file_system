@@ -15,8 +15,8 @@ format: format.c fs_struct.h
 testinit: test.c libfilesys.so
 	$(CC) -o testinit $(FLAGS) test.c libfilesys.so
 
-testmkdir: test_mkdir.c libfilesys.so
-	$(CC) -o testmkdir $(FLAGS) test_mkdir.c libfilesys.so
+testmkdir: testmkdir.c libfilesys.so
+	$(CC) -o testmkdir $(FLAGS) testmkdir.c libfilesys.so
 
 clean:
 	rm format testinit testmkdir file_lib.o libfilesys.so
