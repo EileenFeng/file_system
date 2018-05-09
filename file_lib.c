@@ -893,7 +893,7 @@ int f_read(void* buffer, int bsize, int fd) {
 
 
 
-int f_stat(int fd, struct fStat* st) {
+int f_stat(int fd, struct fst* st) {
   struct file_table_entry* entry = open_ft->entries[fd];
   if(entry == NULL) {
     printf("f_stat:     Invalid file descriptor\n");
@@ -1303,7 +1303,7 @@ int f_close(int fd) {
       }
     }
   }
-  printf("7\n");
+  printf("7 parent filepath is %s\n", filepath);
   if(parent_entry == NULL) {
     printf("f_close:    parent directory is already close. Something went wrong...\n");
     return FAIL;
@@ -1340,10 +1340,10 @@ int f_closedir(int dir_fd) {
   }
   printf("f_closedir:   closing directory %s\n", entry->filepath);
   printf("in open close dir before fclose\n");
-  print_openft();
+  //print_openft();
   f_close(dir_fd);
   printf("in open close dir aaafer fclose\n");
-  print_openft(); 
+  //print_openft(); 
   printf("f_closedir: end of calling 'f_close'\n");
   return SUCCESS;
 }
@@ -1438,12 +1438,13 @@ int f_rmdir(char* filepath) {
   }
   f_rewind(dir_fd);
   printf("first time\n");
-  print_openft();
+  //print_openft();
   f_remove(filepath, TRUE);
   printf("second time\n");
-  print_openft(); 
+  //print_openft(); 
+  printf("first time\n");
   f_closedir(dir_fd);
-  print_openft();
+  //print_openft();
 }
 
 int f_unmount() {

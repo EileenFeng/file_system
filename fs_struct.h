@@ -18,7 +18,7 @@
 #define INODE_SETUP 4
 #define ROOT_INDEX 0
 #define HOME_INDEX 1
-#define DEFAULT_PERM 755 //rwxr-xr-x
+#define DEFAULT_PERM RWE //rwxr-xr-x
 #define TABLE_ENTRYNUM 128
 #define INODE_SIZE 96
 #define LEVELONE 520
@@ -93,14 +93,14 @@ struct dirent {
 }dirent;
 
 // decides whether ctime is needed
-struct fStat{
+struct fst{
   int uid; //owner's id
   int gid;
   int filesize;
   int type;
   int permission;
   int inode_index;
-} fStat;
+} fst;
 
 struct file_table_entry{
   int fd;
