@@ -1652,6 +1652,7 @@ static int create_file(int parent_fd, char* newfile_name, int type, int permissi
   }
   struct inode* new_file_inode = (struct inode*)(cur_disk.inodes + new_inode_index * INODE_SIZE);
   cur_disk.sb.free_inode_head = new_file_inode->next_free_inode;
+  printf("\n\n\n\n\ncurrent free inode head is %d\n", cur_disk.sb.free_inode_head);
   write_newinode(new_file_inode, new_inode_index, parent_entry->inode_index, type);
   new_file_inode->permissions = permission;
   // need to write new entries into the parent directory file
