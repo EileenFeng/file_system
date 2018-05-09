@@ -5,6 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include "file_lib.h"
+#include "fs_struct.h"
 
 #define HISTSIZE 5 // set to default size
 
@@ -71,7 +73,7 @@ int exec_cd(char** path_args) {
       printf("Change to directory %s failed! \n", path_args[1]);
     }
   }
-  return 1;
+  return TRUE;
 }
 
 // get the address of history input
@@ -116,13 +118,13 @@ int execute_history_input(char* history_input) {
     } else {
       printf("Invalid input for executing history input!\n");
       store_history(history_input);
-      return 1;
+      return TRUE;
     }
     for(int i = start; i < strlen(history_input); i++) {
       if(!isdigit(history_input[i])) {
 	printf("History index can be positive numbers only! \n");
 	store_history(history_input);
-	return 1;
+	return TRUE;
       } else {
 	index *= 10;
 	index += history_input[i] - '0';
@@ -146,7 +148,7 @@ int execute_history_input(char* history_input) {
   if(arg_nums == 0) {
     printf("History input has no command inputs!\n");
     free(args);
-    return 1;
+    return TRUE;
   }
   if(args[0][0] == '!') {
     free(args);
@@ -164,7 +166,7 @@ int print_history(){
     printf("%d. ", i+1);
     printf("%s\n", *get_recent_history_input(count - (ind - i - 1)));
   }
-  return 1;
+  return TRUE;
 }
 
 // function for executing 'history' command
@@ -174,7 +176,7 @@ int exec_history(char** arg) {
   } else {
     print_history();
   }
-  return 1;
+  return TRUE;
 }
 
 // execute command line inputs
@@ -183,31 +185,43 @@ int exec_args(char** args, char*input, int free_args) {
   if(args[0][0] == '!') {
     return execute_history_input(args[0]);
   } else {
-    if(strcmp(args[0], "history") == 0) {
+    if(strcmp(args[0], "format") == SUCCESS) {
+      pid_t pid=fork();
+      if (pid==0) { 
+          static char *argv[]={"./format",NULL};
+          execv("./format",argv);
+          free(args);
+          exit(0);
+      }
+      else { /* pid!=0; parent process */
+          waitpid(pid,0,0); /* wait for child to exit */
+      }
+      value = TRUE;
+    } else if(strcmp(args[0], "history") == SUCCESS) {
       value =  exec_history(args);
-    }else if(strcmp(args[0], "cd") == 0) { // if the command is cd
+    }else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
       value = exec_cd(args);
-    }else if(strcmp(args[0], "exit") == 0) { // if the command is exit
+    }else if(strcmp(args[0], "exit") == SUCCESS) { // if the command is exit
       return 0;
     } else {
       pid_t pid;
       int status;
       pid = fork();
       if(pid < 0) {
-	printf("Execute command failed - fork failed! \n");
+	      printf("Execute command failed - fork failed! \n");
       } else if (pid == 0) { // children process
-	if(execvp(args[0], args) < 0) {
-	  printf("An error occurred during execution, executing command %s failed!\n", args[0]);
-	}
-	free(args);
-	exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/  
+        if(execvp(args[0], args) < 0) {
+          printf("An error occurred during execution, executing command %s failed!\n", args[0]);
+        }
+        free(args);
+        exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/  
       } else if (pid > 0) {
-	pid_t res = wait(&status);
-	if(res < 0) {
-	  printf("Child %d is not waited by the parent\n", pid);
-	}
+        pid_t res = wait(&status);
+        if(res < 0) {
+          printf("Child %d is not waited by the parent\n", pid);
+        }
       }
-      value = 1;
+      value = TRUE;
     }
   }
   // when exec_history_input calls exec_args, need to free the array 'args'
