@@ -2513,3 +2513,24 @@ int check_permission(struct inode* target, int access) {
     }
   }
 }
+
+
+int print_free() {
+int count = 0;
+int fb = cur_disk.sb.free_block_head;
+while (fb != -1) {
+count++;
+int freeOffset = cur_disk.data_region_offset + fb * BLOCKSIZE;
+lseek(cur_disk.diskfd, freeOffset, SEEK_SET);
+void* buffer = malloc(BLOCKSIZE);
+if (read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+printf("getnextfree:    get next free Offset failed. \n");
+free(buffer);
+return FAIL;
+}
+struct free_block* oldhead = (struct free_block*)buffer;
+fb = oldhead->next_free;
+}
+printf("Totol free blocks: %d\n", count);
+return count;
+}
