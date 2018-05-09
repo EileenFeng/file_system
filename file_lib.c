@@ -212,6 +212,7 @@ struct dirent* f_readdir(int dir_fd) {
     printf("freaddir: Directory file is empty. No content to read for f_readdir\n");
     return NULL;
   }
+
   // read in data
   struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * INODE_SIZE);
   printf("Readdir: blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
@@ -230,7 +231,18 @@ struct dirent* f_readdir(int dir_fd) {
     return NULL;
   }
   // update offset, block offset, block index
-  int new_offset = target->offset + DIRENT_SIZE;
+  struct table datatable;
+  get_tables(target, &datatable);
+  int new_offset = (target->offset + DIRENT_SIZE) - BLOCKSIZE;
+  if(target->offset + DIRENT_SIZE >= BLOCKSIZE) {
+    target->block_index ++;
+    get_tables(target, &datatable);
+    target->block_offset = datatable.cur_data_table[datatable.intable_index];
+    target->offset = new_offset;
+  } else {
+    target->offset += DIRENT_SIZE;
+  }
+  /*
   if(new_offset >= BLOCKSIZE) {
     int new_blockindex = target->block_index + 1;
     printf("Readdir: Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
@@ -331,6 +343,7 @@ struct dirent* f_readdir(int dir_fd) {
   } else {
     target->offset = new_offset;
   }
+  */
   printf("Readdir:  file name for the ret is %s\n", ret->filename);
   return ret;
 }
