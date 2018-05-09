@@ -1391,7 +1391,7 @@ int f_mkdir(char* filepath, int mode) {
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
   if(target_file != NULL) {
     if(target_file->type == DIR) {
-      printf("f_mkdir:      directory already exists\n");
+      printf("f_mkdir:      directory %s already exists\n", filepath);
       free(target_file);
       return FAIL;
     } else {

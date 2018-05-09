@@ -6,10 +6,10 @@
 
 int main() {
 	f_mount("DISK");
-	f_mkdir("feichi", RWE);
-	for (int i = 0; i < 80; i++) {
+	f_mkdir("home/feichi", RWE);
+	for (int i = 0; i < 43; i++) {
 		char input[20];
-		sprintf(input, "feichi/%d", i);
+		sprintf(input, "home/feichi/%d", i);
 		int result = f_mkdir(input, RWE);
 	}
 	//result = f_opendir("home/rusr");
