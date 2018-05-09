@@ -106,14 +106,14 @@ int main(int argc, char** argv) {
         return FAIL;
     }
 
-    super_user.inode_index = 2;
+    super_user.inode_index = SPRINODE;
     super_user.parent_inode = HOME_INDEX;
     super_user.permissions = DEFAULT_PERM; //rwxr-xr-x
     super_user.type = DIR;
     super_user.next_free_inode = UNDEFINED;
     super_user.nlink = 1;
     super_user.size = 0;
-    super_user.uid = SUPERUSER;
+    super_user.uid = SPRUSER;
     super_user.gid = UNDEFINED;
     for(int i = 0; i < N_DBLOCKS; i++) {
         super_user.dblocks[i] = UNDEFINED;
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
         return FAIL;
     }
 
-    reg_user.inode_index = 3;
+    reg_user.inode_index = REGINODE;
     reg_user.parent_inode = HOME_INDEX;
     reg_user.permissions = DEFAULT_PERM; //rwxr-xr-x
     reg_user.type = DIR;

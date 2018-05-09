@@ -1479,11 +1479,12 @@ int print_openft(){
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
-  int size = 20;
+  int size = 50;
   int count = 0;
   char file_path[MAX_LENGTH];
   strcpy(file_path, filepath);
   char** parse_result = (char**)malloc(sizeof(char*) * size);
+  bzero(parse_result, size * sizeof(char*));
   char* token;
   printf("parse file path: filepath is %s\n", filepath);
   token = strtok(file_path, delim);

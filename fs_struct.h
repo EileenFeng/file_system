@@ -14,8 +14,7 @@
 #define MAX_LENGTH 300
 #define MAX_OPENFILE 50
 #define DIRENT_SIZE 64
-#define SUPERUSER 1
-#define REGUSER 2
+
 #define INODE_SETUP 4
 #define ROOT_INDEX 0
 #define HOME_INDEX 1
@@ -25,6 +24,12 @@
 #define LEVELONE 520
 #define LEVELTWO 16904
 #define LEVELTHREE 2114056
+
+// users
+#define SPRUSER 1
+#define REGUSER 2
+#define SPRINODE 2
+#define REGINODE 3
 
 enum fileseek {SEEKSET, SEEKCUR, SEEKEND};
 enum file_type{DIR, REG};
