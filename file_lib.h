@@ -12,7 +12,7 @@ int f_write(void* buffer, int bsize, int fd); // done NEED TO TEST
 int f_close(int fd); //done
 int f_seek(int fd, int offset, int whence); // done
 int f_rewind(int fd); //done
-int f_stat(int fd, struct fStat* st); //done
+int f_stat(int fd, struct fst* st); //done
 /*  when SEEK_END, seek backwards */
 int f_remove(char* filepath, int empty_dir); // done
 

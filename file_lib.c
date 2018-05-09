@@ -1321,7 +1321,7 @@ int f_close(int fd) {
   // update file table
   open_ft->free_id[fd] = fd;
   open_ft->free_fd_num ++;
-  open_ft->filenum ++;
+  open_ft->filenum --;
   open_ft->entries[fd] = NULL;
   return SUCCESS;
 }
@@ -1634,7 +1634,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   result->fd = open_ft->free_id[freefd_index];
   open_ft->free_id[freefd_index] = UNDEFINED;
   update_ft(result, freefd_index);
-  //parent_entry->open_num ++;
+  parent_entry->open_num ++;
   //open_ft->entries[result->fd] = result;
   return result;
 }
