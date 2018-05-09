@@ -336,7 +336,7 @@ struct dirent* f_readdir(int dir_fd) {
 
 
 /*********************** FILE functions ***********************/
-int f_remove(char* filepath) {
+int f_remove(char* filepath, int empty_dir) {
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
@@ -388,7 +388,7 @@ int f_remove(char* filepath) {
     return FAIL;
   }
   // cannot remove a directory with f_remove
-  if(target_file->type != REG) {
+  if(target_file->type != REG && empty_dir == FALSE) {
     printf("f_remove:    7:    Cannot remove a directory file with f_remove\n");
     free(parse_path);
     free(target_file);
@@ -988,19 +988,19 @@ return FAIL;
 int f_rewind(int fd) {
   struct file_table_entry* target = open_ft->entries[fd];
   if (target == NULL) {
-    printf("Invalid file descriptor\n");
+    printf("f_rewind:   Invalid file descriptor\n");
     return FAIL;
   }
   struct inode* target_inode = (struct inode*)(cur_disk.inodes + target->inode_index * INODE_SIZE);
   target->block_index = 0;
   target->offset = 0;
   if(target_inode->size == 0) {
-    printf("Rewinding an empty file\n");
+    printf("f_rewind:   Rewinding an empty file\n");
     target->block_offset = UNDEFINED;
   } else {
     target->block_offset = target_inode->dblocks[0];
   }
-  printf("new block_offset is %d\n", open_ft->entries[fd]->block_offset);
+  printf("f_rewind:   file %s :new block_offset is %d and offset %d\n", open_ft->entries[fd]->filepath, open_ft->entries[fd]->block_offset, open_ft->entries[fd]->offset);
   return SUCCESS;
 }
 
@@ -1083,7 +1083,7 @@ int f_open(char* filepath, int access, int mode) {
         //f_remove
 
         printf("f_open:     88:       rrrrremove and ccccccreating new file\n");
-        int removeres = f_remove(filepath);
+        int removeres = f_remove(filepath, FALSE);
         assert(removeres == SUCCESS);
         int new_file_inode = create_file(parent_fd, prevdir, REG, mode);
         struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
@@ -1382,11 +1382,43 @@ int f_mkdir(char* filepath, int mode) {
       return new_index;
     }
   }
+  printf("f_mkdir:  Creating a new directory %s\n", filepath);
   int new_index = create_file(parent_fd, prevdir, DIR, mode);
   free(target_file);
   return new_index;
-
 }
+
+
+int f_rmdir(char* filepath) {
+  int dir_fd = f_opendir(filepath);
+  f_rewind(dir_fd);
+  struct dirent* cur_dir = f_readdir(dir_fd);
+  printf("start removing!!!!\n");
+  while(cur_dir != NULL) {
+    printf("\n\n @@@@@@@@ f_rmdir:    currently handling %s\n", cur_dir->filename);
+    if(cur_dir->type == REG) {
+      char childpath[MAX_LENGTH];
+      strcpy(childpath, filepath);
+      strcat(childpath, "/");
+      strcat(childpath, cur_dir->filename);
+      printf("f_rmdir:  removing file %s\n", childpath);
+      f_remove(childpath, FALSE);
+    } else if(cur_dir->type == DIR) {
+      char childpath[MAX_LENGTH];
+      strcpy(childpath, filepath);
+      strcat(childpath, cur_dir->filename);
+      printf("f_rmdir:  removing directory ile %s\n", childpath);
+      f_rmdir(childpath);
+    }
+    printf("f_rmdir   get next one\n");
+    free(cur_dir);
+    cur_dir = f_readdir(dir_fd);
+  }
+  f_rewind(dir_fd);
+  f_remove(filepath, TRUE);
+}
+
+
 /*************************** HELPER FUNCTIONS **********************/
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
