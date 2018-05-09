@@ -10,7 +10,7 @@ file_lib.o: file_lib.c file_lib.h
 	$(CC) -c -fpic $(FLAGS) file_lib.c
 
 mysh: shell.c libfilesys.so
-	$(CC) -o mysh $(FLAGS) shell.c
+	$(CC) -o mysh $(FLAGS) shell.c libfilesys.so
 
 format: format.c fs_struct.h
 	$(CC) -o format $(FLAGS) format.c

@@ -68,7 +68,7 @@ static int print_free();
 int f_mount(char* sourcepath) {
   // open disk
   strcpy(disk_img, sourcepath);
-  cur_disk.diskfd = open(sourcepath, O_RDWR);
+  cur_disk.diskfd = open("DISK", O_RDWR);
   if (cur_disk.diskfd == FAIL) {
     printf("Open disk image failed.\n");
     return FAIL;
@@ -2570,6 +2570,6 @@ int print_free() {
 		struct free_block* oldhead = (struct free_block*)buffer;
 		fb = oldhead->next_free;
 	}
-	printf("Totol free blocks: %d\n", count);
+	printf("\n__________________ Totol free blocks: %d ________________\n\n", count);
 	return count;
 }

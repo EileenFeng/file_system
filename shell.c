@@ -51,13 +51,14 @@ int mount_disk(char* mounting_point) {
   // needs to do user login, and when call fucntions on files need to check permission
   int ret = f_mount(mounting_point);
   strcpy(cwd, mounting_point);
-  return ret;
+  printf("cwd is %s\n", cwd);
+  return ret == SUCCESS;
 }
 
 int handle_ls(char* filepath) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath);
-  printf("hand_ls:    after parse fs path is %s\n", fspath);
+  printf("\n\n\n _____________  hand_ls:    after parse fs path is %s\n", fspath);
   int dirfd = f_opendir(fspath);
   if(dirfd == FAIL) {
     printf("Open directory %s failed\n", filepath);
@@ -66,7 +67,9 @@ int handle_ls(char* filepath) {
   struct dirent* temp = f_readdir(dirfd);
   while(temp != NULL) {
     // print filename
-    printf("%s\t", temp->filename);
+    printf("\n\n\n\n%s\t \n\n\n\n(((())))))))))", temp->filename);
+    free(temp);
+    temp = f_readdir(dirfd);
   }
   printf("\n");
   //f_rewind(dirfd);
@@ -198,6 +201,7 @@ int parse_inputpath(char* input_path, char* fs_path) {
         strncpy(fs_path, target, strlen(target));
         fs_path[strlen(target)] = '\0';
     }
+    printf("parse_inputpath return result is %s\n", fs_path);
   freeParse(tokens);
   return SUCCESS;
 }
@@ -223,11 +227,8 @@ int exec_args(char** args, char*input, int free_args) {
     } else if (strcmp(args[0], "mount") == SUCCESS) {
       value = mount_disk(args[1]);
     } else if(strcmp(args[0], "ls") == SUCCESS) {
-      value = 
-    }
-    
-    
-    else if(strcmp(args[0], "history") == SUCCESS) {
+      value = handle_ls(args[1]); 
+    } else if(strcmp(args[0], "history") == SUCCESS) {
       value =  exec_history(args);
     }else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
       value = exec_cd(args);
