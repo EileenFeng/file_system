@@ -9,7 +9,7 @@ int main() {
 	for (int i = 0; i < 80; i++) {
 		char input[20];
 		sprintf(input, "home/rusr/%d.ass", i);
-		int result = f_open(input, OPEN_W);
+		int result = f_open(input, OPEN_W, RWE);
 		f_close(result);
 	}
 	//result = f_opendir("home/rusr");

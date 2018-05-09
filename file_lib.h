@@ -20,7 +20,7 @@ int f_seek(int fd, int offset, int whence); // done
 int f_opendir(char* filepath); //done
 struct dirent* f_readdir(int dir_fd); //done // malloced result
 int f_closedir(int dir_fd);// need to test
-int f_mkdir(char* filepath, int mode);
+int f_mkdir(char* filepath, int mode); // done
 /*
 f_closedir
 :  close an open directory file
