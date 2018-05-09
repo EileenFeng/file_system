@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     //writing super block
     sb.blocksize = BLOCKSIZE;
     sb.inode_offset = 0; // 16 inodes in total
-    sb.data_offset = 9;
+    sb.data_offset = 15;
     sb.free_inode_head = INODE_SETUP; // starts from the second inode,
                             // since the first one (with inode index 0) is always the root dir
     sb.free_block_head = 2; // starts from 0, used by root and home

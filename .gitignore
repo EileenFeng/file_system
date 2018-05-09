@@ -1,3 +1,9 @@
+# certain file
+format
+test*
+!test*.c
+DISK
+.vs/
 # Prerequisites
 *.d
 
