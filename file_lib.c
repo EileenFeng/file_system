@@ -1300,6 +1300,7 @@ int f_close(int fd) {
   printf("8\n");
   parent_entry->open_num --;
   printf("9\n");
+  bzero(entry, sizeof(struct file_table_entry));
   free(entry);
   printf("10\n");
   // update file table
@@ -1323,7 +1324,11 @@ int f_closedir(int dir_fd) {
     return FAIL;
   }
   printf("f_closedir:   closing directory %s\n", entry->filepath);
+  printf("in open close dir before fclose\n");
+  print_openft();
   f_close(dir_fd);
+  printf("in open close dir aaafer fclose\n");
+  print_openft(); 
   printf("f_closedir: end of calling 'f_close'\n");
   return SUCCESS;
 }
@@ -1416,8 +1421,13 @@ int f_rmdir(char* filepath) {
     cur_dir = f_readdir(dir_fd);
   }
   f_rewind(dir_fd);
+  printf("first time\n");
+  print_openft();
   f_remove(filepath, TRUE);
+  printf("second time\n");
+  print_openft(); 
   f_closedir(dir_fd);
+  print_openft();
 }
 
 int f_unmount() {
@@ -1441,6 +1451,18 @@ int f_unmount() {
 }
 
 /*************************** HELPER FUNCTIONS **********************/
+int print_openft(){
+  for(int i = 0; i < MAX_OPENFILE; i++) {
+    struct file_table_entry* temp = open_ft->entries[i];
+    printf("========================  %d  ===============================\n", i);
+    if(temp != NULL) {
+      printf("contains file with fd %d and filename %s\n", temp->fd, temp->filepath);
+    }
+  }
+  printf("=======================================================\n"); 
+}
+
+
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
@@ -1594,8 +1616,8 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   result->fd = open_ft->free_id[freefd_index];
   open_ft->free_id[freefd_index] = UNDEFINED;
   update_ft(result, freefd_index);
-  parent_entry->open_num ++;
-  open_ft->entries[result->fd] = result;
+  //parent_entry->open_num ++;
+  //open_ft->entries[result->fd] = result;
   return result;
 }
 
