@@ -61,8 +61,29 @@ static int write_disk_inode();
 static int remove_dirent(int parent_fd, int parent_inode, int child_inode);
 // free the inode
 static int free_inode(int inode_index);
-/************************ LIB FUNCTIONS *****************************/
+static int print_free();
 
+/************************ LIB FUNCTIONS *****************************/
+							
+int print_free() {
+	int count = 0;
+	int fb = cur_disk.sb.free_block_head;
+	while (fb != -1) {
+		count++;
+		int freeOffset = cur_disk.data_region_offset + fb * BLOCKSIZE;
+		lseek(cur_disk.diskfd, freeOffset, SEEK_SET);
+		void* buffer = malloc(BLOCKSIZE);
+		if (read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
+			printf("getnextfree:    get next free Offset failed. \n");
+			free(buffer);
+			return FAIL;
+		}
+			struct free_block* oldhead = (struct free_block*)buffer;
+		fb = oldhead->next_free;
+	}
+	printf("Totol free blocks: %d\n", count);
+	return count;
+}
 int f_mount(char* sourcepath) {
   // open disk
   strcpy(disk_img, sourcepath);
@@ -1346,6 +1367,7 @@ int f_closedir(int dir_fd) {
 }
 
 int f_mkdir(char* filepath, int mode) {
+	print_free();//debug
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
