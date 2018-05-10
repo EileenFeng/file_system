@@ -22,6 +22,8 @@ int interrupt = 0;
 // stdio fd
 int rfd = 0;
 int wfd = 1;
+int mounted = FALSE;
+int format = FALSE;
 // current working directory
 char cwd[MAX_LENGTH];
 char mounted_point[MAX_LENGTH];
@@ -290,7 +292,7 @@ void construct_user() {
 }
 
 void get_parent_path(char* filepath) {
-  printf("get_parent_path:    in getting the parent path of %s\n", filepath);
+  //printf("get_parent_path:    in getting the parent path of %s\n", filepath);
   if(strlen(filepath) <= 0) {
     return;
   }
@@ -417,6 +419,14 @@ int getnum(char** args) {
 
 // execute command line inputs
 int exec_args(char** args, char*input, int free_args) {
+  if(strcmp(args[0], "exit") == SUCCESS) {
+    return FALSE;
+  }
+  if(mounted == FALSE && strcmp(args[0], "mount") != SUCCESS && strcmp(args[0], "format") != SUCCESS) {
+    printf("Please mount first!\n");
+    return TRUE;
+  }
+
   int value = FALSE;
   int argnum = getnum(args);
   if(args[0][0] == '!') {
@@ -439,6 +449,7 @@ int exec_args(char** args, char*input, int free_args) {
         printf("Invalid Input!\n");
         value = TRUE;
       } else {
+        mounted = TRUE;
         value = mount_disk(args[1]);
       }
     } else if(strcmp(args[0], "ls") == SUCCESS) {
@@ -509,6 +520,7 @@ int exec_args(char** args, char*input, int free_args) {
       }
     } else if(strcmp(args[0], "unmount") == SUCCESS) {
       value = unmount();
+      mounted = FALSE;
     } else if(strcmp(args[0], "history") == SUCCESS) {
       value =  exec_history(args);
     } else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
