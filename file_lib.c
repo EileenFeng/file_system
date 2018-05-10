@@ -69,6 +69,7 @@ int f_mount(char* sourcepath) {
   // open disk
   strcpy(disk_img, sourcepath);
   cur_disk.diskfd = open("DISK", O_RDWR);
+  cur_disk.uid = 0;
   if (cur_disk.diskfd == FAIL) {
     printf("Open disk image failed.\n");
     return FAIL;
@@ -89,6 +90,7 @@ int f_mount(char* sourcepath) {
     free(buffer);
     return FAIL;
   }
+
   struct superblock* temp = (struct superblock*)buffer;
   cur_disk.sb.blocksize = temp->blocksize;
   cur_disk.sb.inode_offset = temp->inode_offset;

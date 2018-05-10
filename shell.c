@@ -10,7 +10,8 @@
 #include "fs_struct.h"
 
 #define HISTSIZE 5 // set to default size
-
+#define LFLAG 1
+#define FFLAG 2
 // global variables
 int buff_size = 32;
 int arg_nums = 0;
@@ -54,6 +55,7 @@ char** tokenizer(char* filepath);
 void freeParse(char** parse_result);
 void get_parent_path(char* filepath);
 int start_with(char* filepath, char* prefix);
+int unmount();
 /************************ FUNCTIONS ****************************/
 int mount_disk(char* mounting_point) {
   strcpy(mounted_point, mounting_point);
@@ -67,7 +69,7 @@ int mount_disk(char* mounting_point) {
   return ret == SUCCESS;
 }
 
-int handle_ls(char* filepath) {
+int handle_ls(char* filepath, int flags) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);  
   printf("\n\n\n _____________  hand_ls:    after parse fs path is %s\n", fspath);
@@ -78,10 +80,37 @@ int handle_ls(char* filepath) {
     return TRUE;
   }
   struct dirent* temp = f_readdir(dirfd);
+  int filecount = 0;
   while(temp != NULL) {
     // print filename
-    printf("\n\n\n\n%s\t \n\n\n\n(((())))))))))", temp->filename);
+    if(flags == FFLAG) {
+      if(temp->type == DIR) {
+        printf("\n\n\n\n\n%s/\t", temp->filename);
+      } else if(temp->type == REG) {
+        printf("\n\n\n\n\n%s\t", temp->filename);
+      }
+    } else if(flags == LFLAG) {
+      char childpath[MAX_LENGTH];
+      strcpy(childpath, fspath);
+      strcat(childpath, temp->filename);
+      printf("\n\n\n\n\n\n\n\n\n\nfile path is %s\n", childpath);
+      
+      int fd = f_opendir(childpath);
+      struct fst* st = (struct fst*)malloc(sizeof(struct fst));
+      f_stat(fd, st);
+      if(st->type == DIR) {
+        printf("\n\n\n\n\n[type]: DIR\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
+      } else if (st->type == REG) {
+        printf("\n\n\n\n\n[type]: REG\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
+      }
+      f_closedir(fd);
+      free(st);
+    } else {
+      printf("\n\n\n\n\n%s\t", temp->filename);
+    }
     free(temp);
+    filecount += DIRENT_SIZE;
+    f_seek(dirfd, filecount, SEEKSET);
     temp = f_readdir(dirfd);
   }
   printf("\n");
@@ -213,6 +242,11 @@ int handle_cd(char* filepath) {
   bzero(cwd, MAX_LENGTH);
   strcpy(cwd, fspath);
   //printf("current cwd is %s\n", cwd);
+  return TRUE;
+}
+
+int unmount() {
+  f_unmount();
   return TRUE;
 }
 
@@ -393,9 +427,21 @@ int exec_args(char** args, char*input, int free_args) {
       }
     } else if(strcmp(args[0], "ls") == SUCCESS) {
       if (argnum < 2) {
-        value = handle_ls("./");
-      } else {
-        value = handle_ls(args[1]); 
+        value = handle_ls("./", FALSE);
+      } else if (argnum == 2){
+        if(strcmp(args[1], "-F") == SUCCESS) {
+          value = handle_ls("./", FFLAG); 
+        } else if (strcmp(args[1], "-l") == SUCCESS) {
+          value =  handle_ls("./", LFLAG); 
+        } else {
+          value = handle_ls(args[1], FALSE);
+        }
+      } else if (argnum == 3) {
+        if(strcmp(args[1], "-F") == SUCCESS) {
+          value = handle_ls(args[2], FFLAG); 
+        } else if (strcmp(args[1], "-l") == SUCCESS) {
+          value =  handle_ls(args[2], LFLAG); 
+        } 
       }
     } else if(strcmp(args[0], "mkdir") == SUCCESS) {
       if(argnum < 2) {
@@ -445,6 +491,8 @@ int exec_args(char** args, char*input, int free_args) {
         printf("Invalid Input!\n");
         value = TRUE;
       }
+    } else if(strcmp(args[0], "unmount") == SUCCESS) {
+      value = unmount();
     } else if(strcmp(args[0], "history") == SUCCESS) {
       value =  exec_history(args);
     } else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
