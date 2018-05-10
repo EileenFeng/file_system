@@ -734,7 +734,7 @@ int f_remove(char* filepath, int empty_dir) {
       bzero(block_buffer, BLOCKSIZE);
       block_buffer[0] = oldhead;
       cur_disk.sb.free_block_head = levelone[i];
-      lseek(cur_disk.diskfd, levelone[i], SEEK_SET);
+      lseek(cur_disk.diskfd, level2_offset, SEEK_SET);
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     free levelone[i] in indblocks failed\n");
         free(block_buffer);
@@ -772,8 +772,8 @@ int f_remove(char* filepath, int empty_dir) {
         int oldhead = cur_disk.sb.free_block_head;
         bzero(block_buffer, BLOCKSIZE);
         block_buffer[0] = oldhead;
-        cur_disk.sb.free_block_head = leveltwo[i];
-        lseek(cur_disk.diskfd, leveltwo[i], SEEK_SET);
+        cur_disk.sb.free_block_head = leveltwo[j];
+        lseek(cur_disk.diskfd, level3_offset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free levelone[i] in indblocks failed\n");
           free(block_buffer);
@@ -2572,7 +2572,7 @@ int check_permission(struct inode* target, int access) {
 int print_free() {
 	int count = 0;
 	int fb = cur_disk.sb.free_block_head;
-	while (fb != -1) {
+	while (fb != FAIL) {
 		count++;
 		int freeOffset = cur_disk.data_region_offset + fb * BLOCKSIZE;
 		lseek(cur_disk.diskfd, freeOffset, SEEK_SET);
