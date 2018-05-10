@@ -76,7 +76,7 @@ int main() {
   }
 
   printf("++++++++++++++++ f_stat +++++++++++++++++++\n");
-  struct fStat* st = malloc(sizeof(struct fStat));
+  struct fst* st = malloc(sizeof(struct fst));
   f_stat(newnew_fd, st);
   printf("\n\n stat has size %d\n", st->filesize);
 
