@@ -62,6 +62,7 @@ static int remove_dirent(int parent_fd, int parent_inode, int child_inode);
 // free the inode
 static int free_inode(int inode_index);
 static int print_free();
+static void scope(char* name);
 
 /************************ LIB FUNCTIONS *****************************/
 
@@ -168,6 +169,7 @@ return SUCCESS;
 /*********************** directory functions ***********************/
 
 int f_opendir(char* filepath) {
+
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* curdir = parse_path[count];
@@ -353,6 +355,8 @@ struct dirent* f_readdir(int dir_fd) {
 
 /*********************** FILE functions ***********************/
 int f_remove(char* filepath, int empty_dir) {
+	char name[320] __attribute__((cleanup(scope)));
+	sprintf(name, "f_remove:%s", filepath);
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
@@ -1140,6 +1144,8 @@ int f_open(char* filepath, int access, int mode) {
 
 
 int f_write(void* buffer, int bsize, int fd) {
+	char name[20] __attribute__((cleanup(scope)));
+	sprintf(name, "f_write:%d ",fd);
   struct file_table_entry* writeto = open_ft->entries[fd];
   if(writeto == NULL) {
     printf("f_write:    invalid file descriptor\n");
@@ -1349,7 +1355,7 @@ int f_closedir(int dir_fd) {
 }
 
 int f_mkdir(char* filepath, int mode) {
-	print_free();
+	//print_free();
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
@@ -1412,6 +1418,8 @@ int f_mkdir(char* filepath, int mode) {
 
 
 int f_rmdir(char* filepath) {
+	char name[320] __attribute__((cleanup(scope)));
+	sprintf(name, "f_rmdir<%s>\n",filepath);
   int dir_fd = f_opendir(filepath);
   f_rewind(dir_fd);
   struct dirent* cur_dir = f_readdir(dir_fd);
@@ -2569,6 +2577,11 @@ int print_free() {
 		struct free_block* oldhead = (struct free_block*)buffer;
 		fb = oldhead->next_free;
 	}
-	printf("Totol free blocks: %d\n", count);
+	printf("*********Totol free blocks: %d\n\n", count);
 	return count;
+}
+
+void scope(char* name) {
+	printf("\n**********%s finishes\n", name);
+	print_free();
 }
