@@ -244,8 +244,8 @@ int main(int argc, char** argv) {
     printf("testing super block %d\n", sbtest->free_inode_head);
     struct inode* roott = (struct inode*)inode;
     printf("testing inode %d\n", (roott+1)->size);
-    struct dirent* testf = (struct dirent*)(datablock + 512);
-    printf("dirent testt %s\n", testf->filename);
+    //struct dirent* testf = (struct dirent*)(datablock + 512);
+    //printf("dirent testt %s\n", testf->filename);
     fclose(test);
 
 

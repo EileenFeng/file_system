@@ -49,7 +49,7 @@ int cat_write_file(char* filepath);
 
 // helpers for file system
 void construct_user();
-int parse_inputpath(char* input_path, char* fs_path);
+int parse_inputpath(char* input_path, char* fs_path, int parse_cwd);
 char** tokenizer(char* filepath);
 void freeParse(char** parse_result);
 void get_parent_path(char* filepath);
@@ -62,14 +62,14 @@ int mount_disk(char* mounting_point) {
   }
   // needs to do user login, and when call fucntions on files need to check permission
   int ret = f_mount(mounting_point);
-  strcpy(cwd, mounting_point);
+  //strcpy(cwd, mounting_point);
   printf("cwd is %s\n", cwd);
   return ret == SUCCESS;
 }
 
 int handle_ls(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   printf("\n\n\n _____________  hand_ls:    after parse fs path is %s\n", fspath);
   int dirfd = f_opendir(fspath);
   f_rewind(dirfd);
@@ -110,7 +110,7 @@ int make_dir(char* filepath, char* mode) {
   printf("mode is %d\n", dirmode);
   // parse file path and call lib function
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   int mkdir = f_mkdir(fspath, dirmode);
   if(mkdir == FAIL) {
     printf("Creating directory %s failed\n", filepath);
@@ -120,7 +120,7 @@ int make_dir(char* filepath, char* mode) {
 
 int remove_dir(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   int rmdir = f_rmdir(fspath);
   if(rmdir == FAIL) {
     printf("Remove directory %s failed\n", filepath);
@@ -130,7 +130,7 @@ int remove_dir(char* filepath) {
 
 int remove_file(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   int rmfile = f_remove(fspath, FALSE);
   if(rmfile == FAIL) {
     printf("Remove directory %s failed\n", filepath);
@@ -140,7 +140,7 @@ int remove_file(char* filepath) {
 
 int cat_file(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   int filefd = f_open(fspath, OPEN_R, R);
   if(filefd == FAIL) {
     printf("Open file %s for read failed\n", filepath);
@@ -164,7 +164,7 @@ int cat_file(char* filepath) {
 int cat_write_file(char* filepath) {
   // open file for read
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath);  
+  parse_inputpath(filepath, fspath, FALSE);  
   //!!!!!!! needs to chaneg to current user's permission
   int fildes = f_open(fspath, OPEN_W, RWE);
   if(fildes == FAIL) {
@@ -203,6 +203,19 @@ int cat_write_file(char* filepath) {
   return TRUE;
 }
 
+int handle_cd(char* filepath) {
+  char temp[MAX_LENGTH];
+  strcpy(temp, cwd);
+  strcat(temp, "/");
+  strcat(temp, filepath);
+  char fspath[MAX_LENGTH];
+  parse_inputpath(filepath, fspath, TRUE);  
+  bzero(cwd, MAX_LENGTH);
+  strcpy(cwd, fspath);
+  //printf("current cwd is %s\n", cwd);
+  return TRUE;
+}
+
 /********************* FS helpers ***********************/
 
 void construct_user() {
@@ -221,6 +234,9 @@ void construct_user() {
 
 void get_parent_path(char* filepath) {
   printf("get_parent_path:    in getting the parent path of %s\n", filepath);
+  if(strlen(filepath) <= 0) {
+    return;
+  }
   char old[MAX_LENGTH];
   strcpy(old, filepath);
   int new_len = strlen(filepath);
@@ -259,7 +275,7 @@ char** tokenizer(char* filepath) {
   char** parse_result = (char**)malloc(sizeof(char*) * size);
   bzero(parse_result, size * sizeof(char*));
   char* token;
-  printf("parse file path: filepath is %s\n", filepath);
+  //printf("parse file path: filepath is %s\n", filepath);
   token = strtok(file_path, delim);
   while(token != NULL) {
     if(count >= size) {
@@ -269,7 +285,7 @@ char** tokenizer(char* filepath) {
     char* temp = malloc(sizeof(char) * (strlen(token) + 1));
     strcpy(temp, token);
     parse_result[count] = temp;
-    printf("parse file path: parse result %d is %s\n", count, parse_result[count]);
+    //printf("parse file path: parse result %d is %s\n", count, parse_result[count]);
     token = strtok(NULL, delim);
     count ++;
   }
@@ -290,9 +306,17 @@ void freeParse(char** parse_result) {
 }
 
 // fs path must be max_length
-int parse_inputpath(char* input_path, char* fs_path) {
+int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
   bzero(fs_path, MAX_LENGTH);
-  strcpy(fs_path, "");
+  // changed
+  strcpy(fs_path, cwd);
+  char temp[MAX_LENGTH];
+  bzero(temp, MAX_LENGTH);
+  strcpy(temp, cwd);
+  strcat(temp, "/");
+  strcat(temp, input_path);
+  printf("tokenizing %s\n", input_path);
+  printf("before hile fs_path is %s\n", fs_path);
   char** tokens = tokenizer(input_path);
   int count = 0;
   char* token = tokens[count];
@@ -307,6 +331,7 @@ int parse_inputpath(char* input_path, char* fs_path) {
         continue;
       //}
     } else if (strcmp(token, "..") == SUCCESS) {
+      printf("back to parent\n");
       get_parent_path(fs_path);
     } else {
       strcat(fs_path, "/");
@@ -316,7 +341,7 @@ int parse_inputpath(char* input_path, char* fs_path) {
     count++;
     token = tokens[count];
   } 
-    if(start_with(fs_path, mounted_point)) {
+    if(start_with(fs_path, mounted_point) && parse_cwd != TRUE) {
         int prefix = strlen(mounted_point);
         char temp[MAX_LENGTH];
         strcpy(temp, fs_path);
@@ -396,7 +421,11 @@ int exec_args(char** args, char*input, int free_args) {
         value = remove_file(args[1]);
       }
     } else if (strcmp(args[0], "pwd") == SUCCESS) {
-      printf("%s\n", cwd);
+      char temp[MAX_LENGTH];
+      strncpy(temp, mounted_point, strlen(mounted_point) - 1);
+      temp[strlen(mounted_point) - 1] = '\0';
+      strcat(temp, cwd);
+      printf("%s\n", temp);
       value = TRUE;
     } else if (strcmp(args[0], "cat") == SUCCESS) {
       if(argnum < 2) {
@@ -416,14 +445,15 @@ int exec_args(char** args, char*input, int free_args) {
         printf("Invalid Input!\n");
         value = TRUE;
       }
-    }
-    
-    
-    
-    else if(strcmp(args[0], "history") == SUCCESS) {
+    } else if(strcmp(args[0], "history") == SUCCESS) {
       value =  exec_history(args);
-    }else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
-      value = exec_cd(args);
+    } else if(strcmp(args[0], "cd") == SUCCESS) { // if the command is cd
+      //value = exec_cd(args);
+      if(argnum == 1) {
+        value = TRUE;
+      } else {
+        value = handle_cd(args[1]);
+      }
     }else if(strcmp(args[0], "exit") == SUCCESS) { // if the command is exit
       return 0;
     } else {
