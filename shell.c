@@ -65,15 +65,17 @@ int mount_disk(char* mounting_point) {
   // needs to do user login, and when call fucntions on files need to check permission
   int ret = f_mount(mounting_point);
   //strcpy(cwd, mounting_point);
-  printf("cwd is %s\n", cwd);
   return ret == SUCCESS;
 }
 
 int handle_ls(char* filepath, int flags) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);  
-  printf("\n\n\n _____________  hand_ls:    after parse fs path is %s\n", fspath);
-  int dirfd = f_opendir(fspath);
+    int dirfd = f_opendir(fspath);
+  if(dirfd == FAIL) {
+    printf("Open directory for 'ls' failed\n");
+    return TRUE;
+  }
   f_rewind(dirfd);
   if(dirfd == FAIL) {
     printf("Open directory %s failed\n", filepath);
@@ -85,28 +87,40 @@ int handle_ls(char* filepath, int flags) {
     // print filename
     if(flags == FFLAG) {
       if(temp->type == DIR) {
-        printf("\n\n\n\n\n%s/\t", temp->filename);
+        printf("%s/\t", temp->filename);
       } else if(temp->type == REG) {
-        printf("\n\n\n\n\n%s\t", temp->filename);
+        printf("%s\t", temp->filename);
       }
     } else if(flags == LFLAG) {
       char childpath[MAX_LENGTH];
       strcpy(childpath, fspath);
+      strcat(childpath, "/");
       strcat(childpath, temp->filename);
-      printf("\n\n\n\n\n\n\n\n\n\nfile path is %s\n", childpath);
-      
-      int fd = f_opendir(childpath);
+        
+      int fd = FAIL;
+      if(temp->type == DIR) {
+	fd = f_opendir(childpath);
+      } else if (temp->type == REG) {
+	fd = f_open(childpath, R, R);
+      } else {
+	printf("Command 'ls' failed\n");
+	return TRUE;
+      }
+      if(fd == FAIL) {
+	printf("Open directory for 'ls' failed\n");
+	return TRUE;
+      }
       struct fst* st = (struct fst*)malloc(sizeof(struct fst));
       f_stat(fd, st);
       if(st->type == DIR) {
-        printf("\n\n\n\n\n[type]: DIR\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
+        printf("[type]: DIR\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
       } else if (st->type == REG) {
-        printf("\n\n\n\n\n[type]: REG\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
+        printf("[type]: REG\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
       }
       f_closedir(fd);
       free(st);
     } else {
-      printf("\n\n\n\n\n%s\t", temp->filename);
+      printf("%s\t", temp->filename);
     }
     free(temp);
     filecount += DIRENT_SIZE;
@@ -136,8 +150,7 @@ int make_dir(char* filepath, char* mode) {
   }else if(strcmp(mode, "RWE") == SUCCESS) {
     dirmode  = RWE;
   }
-  printf("mode is %d\n", dirmode);
-  // parse file path and call lib function
+    // parse file path and call lib function
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);  
   int mkdir = f_mkdir(fspath, dirmode);
@@ -179,7 +192,7 @@ int cat_file(char* filepath) {
   f_stat(filefd, st);
   char buffer[st->filesize];
   int readfile = f_read((void*)buffer, st->filesize, filefd);
-  printf("read %d bytes\n", readfile);
+  printf("Read %d bytes\n", readfile);
   if(readfile == FAIL) {
     printf("Read from file %s failed\n");
     return TRUE;
@@ -226,7 +239,7 @@ int cat_write_file(char* filepath) {
     }
     totalwrite += count;
   }
-  printf("wrote %d bytes\n", totalwrite);
+  printf("Write  %d bytes\n", totalwrite);
   f_close(fildes);
   printf("End of f_close\n");
   return TRUE;
@@ -283,7 +296,6 @@ void get_parent_path(char* filepath) {
   new_len --;
   strncpy(filepath, old, new_len);
   filepath[new_len] = '\0';
-  printf("get_parent_path: resulting path is %s\n", filepath);
 }
 
 int start_with(char* filepath, char* prefix) {
@@ -349,13 +361,10 @@ int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
   strcpy(temp, cwd);
   strcat(temp, "/");
   strcat(temp, input_path);
-  printf("tokenizing %s\n", input_path);
-  printf("before hile fs_path is %s\n", fs_path);
   char** tokens = tokenizer(input_path);
   int count = 0;
   char* token = tokens[count];
   while(token != NULL) {
-    printf("parse_inputpath: current token is %s and before this interation path is %s\n", token, fs_path);
     if(strcmp(token, ".") == SUCCESS) {
     //   if(count == 0) {
     //     strcat(fs_path, cwd);
@@ -365,13 +374,11 @@ int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
         continue;
       //}
     } else if (strcmp(token, "..") == SUCCESS) {
-      printf("back to parent\n");
       get_parent_path(fs_path);
     } else {
       strcat(fs_path, "/");
       strcat(fs_path, token);
     }
-    printf("parse_inputpath: after this interation path is %s\n", fs_path);
     count++;
     token = tokens[count];
   } 
@@ -384,7 +391,6 @@ int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
         strncpy(fs_path, target, strlen(target));
         fs_path[strlen(target)] = '\0';
     }
-    printf("parse_inputpath return result is %s\n", fs_path);
   freeParse(tokens);
   return SUCCESS;
 }
