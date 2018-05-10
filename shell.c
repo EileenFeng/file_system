@@ -17,7 +17,7 @@ int buff_size = 32;
 int arg_nums = 0;
 char** history; // store history inputs
 int count = 0; // keep counting the number of inputs in total
-int non_history_count = 0; //keep counting the number of inputs that 
+int non_history_count = 0; //keep counting the number of inputs that
 int interrupt = 0;
 // stdio fd
 int rfd = 0;
@@ -70,7 +70,7 @@ int mount_disk(char* mounting_point) {
 
 int handle_ls(char* filepath, int flags) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
     int dirfd = f_opendir(fspath);
   if(dirfd == FAIL) {
     printf("Open directory for 'ls' failed\n");
@@ -96,7 +96,14 @@ int handle_ls(char* filepath, int flags) {
       strcpy(childpath, fspath);
       strcat(childpath, "/");
       strcat(childpath, temp->filename);
-        
+      get_inode(temp->inode_index);
+      if(temp->type == DIR) {
+        printf("[filename]: %s\n", temp->filename);
+      }else if(temp->type == REG) {
+        printf("[filename]: %s\n", temp->filename);
+	  }
+
+      /*
       int fd = FAIL;
       if(temp->type == DIR) {
 	fd = f_opendir(childpath);
@@ -119,6 +126,7 @@ int handle_ls(char* filepath, int flags) {
       }
       f_closedir(fd);
       free(st);
+      */
     } else {
       printf("%s\t", temp->filename);
     }
@@ -152,7 +160,7 @@ int make_dir(char* filepath, char* mode) {
   }
     // parse file path and call lib function
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
   int mkdir = f_mkdir(fspath, dirmode);
   if(mkdir == FAIL) {
     printf("Creating directory %s failed\n", filepath);
@@ -162,7 +170,7 @@ int make_dir(char* filepath, char* mode) {
 
 int remove_dir(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
   int rmdir = f_rmdir(fspath);
   if(rmdir == FAIL) {
     printf("Remove directory %s failed\n", filepath);
@@ -172,7 +180,7 @@ int remove_dir(char* filepath) {
 
 int remove_file(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
   int rmfile = f_remove(fspath, FALSE);
   if(rmfile == FAIL) {
     printf("Remove directory %s failed\n", filepath);
@@ -182,7 +190,7 @@ int remove_file(char* filepath) {
 
 int cat_file(char* filepath) {
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
   int filefd = f_open(fspath, OPEN_R, R);
   if(filefd == FAIL) {
     printf("Open file %s for read failed\n", filepath);
@@ -206,7 +214,7 @@ int cat_file(char* filepath) {
 int cat_write_file(char* filepath) {
   // open file for read
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, FALSE);  
+  parse_inputpath(filepath, fspath, FALSE);
   //!!!!!!! needs to chaneg to current user's permission
   int fildes = f_open(fspath, OPEN_W, RWE);
   if(fildes == FAIL) {
@@ -251,7 +259,7 @@ int handle_cd(char* filepath) {
   strcat(temp, "/");
   strcat(temp, filepath);
   char fspath[MAX_LENGTH];
-  parse_inputpath(filepath, fspath, TRUE);  
+  parse_inputpath(filepath, fspath, TRUE);
   bzero(cwd, MAX_LENGTH);
   strcpy(cwd, fspath);
   //printf("current cwd is %s\n", cwd);
@@ -260,6 +268,8 @@ int handle_cd(char* filepath) {
 
 int unmount() {
   f_unmount();
+  bzero(mounted_point, MAX_LENGTH);
+  bzero(cwd, MAX_LENGTH);
   return TRUE;
 }
 
@@ -275,8 +285,8 @@ void construct_user() {
   reg_user.uid = REGUSER;
   reg_user.permission_value = RW;
   reg_user.home_inode = REGINODE;
-  strcpy(reg_user.username, "superuser");
-  strcpy(reg_user.password, "super");
+  strcpy(reg_user.username, "reguser");
+  strcpy(reg_user.password, "notsuper");
 }
 
 void get_parent_path(char* filepath) {
@@ -381,7 +391,7 @@ int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
     }
     count++;
     token = tokens[count];
-  } 
+  }
     if(start_with(fs_path, mounted_point) && parse_cwd != TRUE) {
         int prefix = strlen(mounted_point);
         char temp[MAX_LENGTH];
@@ -396,7 +406,7 @@ int parse_inputpath(char* input_path, char* fs_path, int parse_cwd) {
 }
 
 int getnum(char** args) {
-  int count = 0; 
+  int count = 0;
   char* temp = args[0];
   while(temp != NULL) {
     count ++;
@@ -414,7 +424,7 @@ int exec_args(char** args, char*input, int free_args) {
   } else {
     if(strcmp(args[0], "format") == SUCCESS) {
       pid_t pid=fork();
-      if (pid==0) { 
+      if (pid==0) {
           static char *argv[]={"./format",NULL};
           execv("./format",argv);
           free(args);
@@ -436,18 +446,18 @@ int exec_args(char** args, char*input, int free_args) {
         value = handle_ls("./", FALSE);
       } else if (argnum == 2){
         if(strcmp(args[1], "-F") == SUCCESS) {
-          value = handle_ls("./", FFLAG); 
+          value = handle_ls("./", FFLAG);
         } else if (strcmp(args[1], "-l") == SUCCESS) {
-          value =  handle_ls("./", LFLAG); 
+          value =  handle_ls("./", LFLAG);
         } else {
           value = handle_ls(args[1], FALSE);
         }
       } else if (argnum == 3) {
         if(strcmp(args[1], "-F") == SUCCESS) {
-          value = handle_ls(args[2], FFLAG); 
+          value = handle_ls(args[2], FFLAG);
         } else if (strcmp(args[1], "-l") == SUCCESS) {
-          value =  handle_ls(args[2], LFLAG); 
-        } 
+          value =  handle_ls(args[2], LFLAG);
+        }
       }
     } else if(strcmp(args[0], "mkdir") == SUCCESS) {
       if(argnum < 2) {
@@ -521,7 +531,7 @@ int exec_args(char** args, char*input, int free_args) {
           printf("An error occurred during execution, executing command %s failed!\n", args[0]);
         }
         free(args);
-        exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/  
+        exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/
       } else if (pid > 0) {
         pid_t res = wait(&status);
         if(res < 0) {
@@ -532,9 +542,9 @@ int exec_args(char** args, char*input, int free_args) {
     }
   }
   // when exec_history_input calls exec_args, need to free the array 'args'
-   if(free_args) { 
-     free(args); 
-   } 
+   if(free_args) {
+     free(args);
+   }
     return value;
 }
 
@@ -595,7 +605,7 @@ char** get_recent_history_input(int num) {
 void store_history(char* input) { // incre = 1 when we need to increment count
   count++;
   int index = count % HISTSIZE;
-  index = index == 0 ? HISTSIZE - 1 : index - 1; 
+  index = index == 0 ? HISTSIZE - 1 : index - 1;
   if(count > HISTSIZE) {
     free(history[index]);
   }
@@ -697,6 +707,28 @@ int main(int argc, char** argv) {
   int run;
   history = malloc(HISTSIZE * sizeof(char*));
   signal(SIGINT, sig_handler);
+  construct_user();
+  char username[20], password[20];
+  int loggedin = FALSE;
+  while(loggedin != TRUE) {
+    printf("Please enter your username:\n");
+    scanf("%s", username);
+    printf("password: \n");
+    scanf("%s", password);
+    if(strcmp(username, reg_user.username) == SUCCESS) {
+      if(strcmp(password, reg_user.password) == SUCCESS) {
+        printf("Successfully logged in!\n");
+        loggedin = TRUE;
+      }
+    }
+    if(strcmp(username, spr_user.username) == SUCCESS) {
+      if(strcmp(password, spr_user.password) == SUCCESS) {
+        printf("Successfully logged in!\n");
+        loggedin = TRUE;
+      }
+    }
+  }
+
   do {
     input = read_input();
     if(!interrupt) {
@@ -706,7 +738,7 @@ int main(int argc, char** argv) {
         if(*input != '!') {
           store_history(input);
           non_history_count ++;
-        } 
+        }
         args = parse_input(input);
         if(arg_nums == 0) {
           printf("No command line inputs!\n");
@@ -729,5 +761,3 @@ int main(int argc, char** argv) {
   }
   free(history);
 }
-
-

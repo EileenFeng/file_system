@@ -179,7 +179,7 @@ int f_opendir(char* filepath) {
   //printf("opendir: curdir is %s\n", curdir);
   if(curdir == NULL) {
     free_parse(parse_path);
-    printf("opendir: root directory already opened\n");
+    //printf("opendir: root directory already opened\n");
     return SUCCESS;
   }
   int parent_fd = cur_disk.rootdir_fd;
@@ -227,7 +227,7 @@ struct dirent* f_readdir(int dir_fd) {
   // printf("Readdir: file offset readdir: %d\n", file_offset);
   //printf("Readdir: file size is %d\n", temp_inode->size);
   if(file_offset >= temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
-    printf("Readdir: End of file\n");
+    //    printf("Readdir: End of file\n");
     return NULL;
   }
   lseek(cur_disk.diskfd, file_offset, SEEK_SET);
@@ -406,14 +406,14 @@ int f_remove(char* filepath, int empty_dir) {
   // cannot remove a not existing file
   if(target_file == NULL) {
     printf("f_remove:    Cannot remove a file that does not exist. \n");
-    free_parse(parse_path); 
+    free_parse(parse_path);
     free(target_file);
     return FAIL;
   }
   // cannot remove a directory with f_remove
   if(target_file->type != REG && empty_dir == FALSE) {
     printf("f_remove:      Cannot remove a directory file with f_remove\n");
-    free_parse(parse_path); 
+    free_parse(parse_path);
     free(target_file);
     return FAIL;
   }
@@ -452,7 +452,7 @@ int f_remove(char* filepath, int empty_dir) {
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     write free data block in dblocks failed\n");
           free(block_buffer);
-	  free_parse(parse_path); 
+	  free_parse(parse_path);
           free(target_file);
           return FAIL;
         }
@@ -486,7 +486,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(read(cur_disk.diskfd, (void*)levelone, BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     indirect:     read in data table failed\n");
         free(block_buffer);
-	free_parse(parse_path); 
+	free_parse(parse_path);
         free(target_file);
         free(levelone);
         return FAIL;
@@ -503,7 +503,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     free levelone[i] in indblocks failed\n");
         free(block_buffer);
-	free_parse(parse_path); 
+	free_parse(parse_path);
         free(target_file);
         free(levelone);
         return FAIL;
@@ -526,7 +526,7 @@ int f_remove(char* filepath, int empty_dir) {
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free data block in indblocks failed\n");
           free(block_buffer);
-	  free_parse(parse_path); 
+	  free_parse(parse_path);
           free(target_file);
           return FAIL;
         }
@@ -544,7 +544,7 @@ int f_remove(char* filepath, int empty_dir) {
   if(filesize <= 0) {
     remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
-    free_parse(parse_path); 
+    free_parse(parse_path);
     free(target_file);
     free(levelone);
     free(block_buffer);
@@ -562,7 +562,7 @@ int f_remove(char* filepath, int empty_dir) {
       free_inode(target->inode_index);
       free(levelone);
       free(leveltwo);
-      free_parse(parse_path); 
+      free_parse(parse_path);
       free(target_file);
       free(block_buffer);
       return FAIL;
@@ -578,7 +578,7 @@ int f_remove(char* filepath, int empty_dir) {
     if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
       printf("f_remove:     free i2offset in i2dblocks failed\n");
       free(block_buffer);
-      free_parse(parse_path); 
+      free_parse(parse_path);
       free(target_file);
       return FAIL;
     }
@@ -597,7 +597,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:   read in LEVEL TWO data table failed in i2block\n");
         free_inode(target->inode_index);
-	free_parse(parse_path); 
+	free_parse(parse_path);
         free(target_file);
         free(levelone);
         free(leveltwo);
@@ -615,7 +615,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     free levelone[i] in indblocks failed\n");
         free(block_buffer);
-	free_parse(parse_path); 
+	free_parse(parse_path);
         free(target_file);
         free(levelone);
         free(leveltwo);
@@ -639,7 +639,7 @@ int f_remove(char* filepath, int empty_dir) {
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free data block in level2 dblocks failed\n");
-	  free_parse(parse_path); 
+	  free_parse(parse_path);
           free(target_file);
           free(block_buffer);
           free(levelone);
@@ -660,7 +660,7 @@ int f_remove(char* filepath, int empty_dir) {
   if(filesize <= 0) {
     remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
-    free_parse(parse_path); 
+    free_parse(parse_path);
     free(target_file);
     free(levelone);
     free(leveltwo);
@@ -680,7 +680,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(levelone);
       free(leveltwo);
       free(levelthree);
-      free_parse(parse_path); 
+      free_parse(parse_path);
       free(target_file);
       free(block_buffer);
       return FAIL;
@@ -697,7 +697,7 @@ int f_remove(char* filepath, int empty_dir) {
       free(levelone);
       free(leveltwo);
       free(levelthree);
-      free_parse(parse_path); 
+      free_parse(parse_path);
       free(target_file);
       free(block_buffer);
       return FAIL;
@@ -721,7 +721,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(readin != BLOCKSIZE){
         printf("f_remove:  level3  read in LEVEL TWO data table failed in i3block %d\n", readin);
         free_inode(target->inode_index);
-	free_parse(parse_path); 
+	free_parse(parse_path);
         free(target_file);
         free(levelone);
         free(leveltwo);
@@ -739,7 +739,7 @@ int f_remove(char* filepath, int empty_dir) {
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
         printf("f_remove:     free levelone[i] in indblocks failed\n");
         free(block_buffer);
-        free_parse(parse_path); 
+        free_parse(parse_path);
         free(target_file);
         free(levelone);
         free(leveltwo);
@@ -760,7 +760,7 @@ int f_remove(char* filepath, int empty_dir) {
         if(read(cur_disk.diskfd, levelthree, BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:  level3 read in LEVEL THREE data table failed in i3block\n");
           free_inode(target->inode_index);
-	  free_parse(parse_path); 
+	  free_parse(parse_path);
           free(target_file);
           free(levelone);
           free(leveltwo);
@@ -778,7 +778,7 @@ int f_remove(char* filepath, int empty_dir) {
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
           printf("f_remove:     free levelone[i] in indblocks failed\n");
           free(block_buffer);
-	  free_parse(parse_path); 
+	  free_parse(parse_path);
           free(target_file);
           free(levelone);
           free(leveltwo);
@@ -801,7 +801,7 @@ int f_remove(char* filepath, int empty_dir) {
           lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
           if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
             printf("f_remove:     level3 free data block in i3dblocks failed\n");
-	    free_parse(parse_path); 
+	    free_parse(parse_path);
             free(target_file);
             free(block_buffer);
             free(levelone);
@@ -826,7 +826,7 @@ int f_remove(char* filepath, int empty_dir) {
   if(filesize <= 0) {
     remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
-    free_parse(parse_path); 
+    free_parse(parse_path);
     free(target_file);
     free(levelone);
     free(leveltwo);
@@ -947,7 +947,7 @@ int f_seek(int fd, int offset, int whence) {
       get_tables(entry, datatable);
       if(datatable->table_level == NONE) {
 	free_struct_table(datatable);
-	printf("fseek:  file is empty\n");
+	//printf("fseek:  file is empty\n");
 	return SUCCESS;
       }
       entry->block_offset = datatable->cur_data_table[datatable->intable_index];
@@ -1022,7 +1022,7 @@ int f_rewind(int fd) {
   target->block_index = 0;
   target->offset = 0;
   if(target_inode->size == 0) {
-    printf("f_rewind:   Rewinding an empty file\n");
+    //printf("f_rewind:   Rewinding an empty file\n");
     target->block_offset = UNDEFINED;
   } else {
     target->block_offset = target_inode->dblocks[0];
@@ -1275,7 +1275,7 @@ int f_close(int fd) {
   }
   if(entry->inode_index == ROOT_INDEX) {
     // need root directory to check
-    printf("f_close:  2:  cannot close root directory. Root directory will be close when unmount\n");
+    //printf("f_close:  2:  cannot close root directory. Root directory will be close when unmount\n");
     return FAIL;
   }
   //printf("1\n");
@@ -1318,11 +1318,11 @@ int f_close(int fd) {
   }
   //printf("7 parent filepath is %s\n", filepath);
   if(parent_entry == NULL) {
-    printf("f_close:    parent directory is already close. Something went wrong...\n");
+    //printf("f_close:    parent directory is already close. Something went wrong...\n");
     return FAIL;
   }
   if(parent_entry->open_num <= 0) {
-    printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
+    //printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
     return FAIL;
   }
   //printf("8\n");
@@ -1343,12 +1343,12 @@ int f_closedir(int dir_fd) {
   struct file_table_entry* entry = open_ft->entries[dir_fd];
   // check if not a DIR file
   if(entry->type != DIR) {
-    printf("f_closedir:     Cannot close a regular file with 'f_closedir'\n");
+    //printf("f_closedir:     Cannot close a regular file with 'f_closedir'\n");
     return FAIL;
   }
   // check if have open files
   if(entry->open_num > 0) {
-    printf("f_closedir:     Cannot close a directory containing opened files\n");
+    //printf("f_closedir:     Cannot close a directory containing opened files\n");
     return FAIL;
   }
   //printf("f_closedir:   closing directory %s\n", entry->filepath);
@@ -1356,7 +1356,7 @@ int f_closedir(int dir_fd) {
   //print_openft();
   f_close(dir_fd);
   //printf("in open close dir aaafer fclose\n");
-  //print_openft(); 
+  //print_openft();
   //printf("f_closedir: end of calling 'f_close'\n");
   return SUCCESS;
 }
@@ -1456,7 +1456,7 @@ int f_rmdir(char* filepath) {
   //print_openft();
   f_remove(filepath, TRUE);
   //printf("second time\n");
-  //print_openft(); 
+  //print_openft();
   //printf("first time\n");
   f_closedir(dir_fd);
   //print_openft();
@@ -1480,6 +1480,9 @@ int f_unmount() {
     //}
   }
   free(open_ft);
+  free(cur_disk.inodes);
+  bzero(&(cur_disk.sb), sizeof(struct superblock));
+  bzero(&(cur_disk), sizeof(struct fs_disk));
 }
 
 /*************************** HELPER FUNCTIONS **********************/
@@ -1491,9 +1494,17 @@ int print_openft(){
       printf("contains file with fd %d and filename %s\n", temp->fd, temp->filepath);
     }
   }
-  printf("=======================================================\n"); 
+  printf("=======================================================\n");
 }
 
+void get_inode(int inode_index) {
+  struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * INODE_SIZE);
+  if(target->type == DIR) {
+    printf("[type]: DIR\t[permission]: %d\t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", target->permissions, target->size, target->uid,target->gid);
+  } else if(target->type == REG) {
+    printf("[type]: REG\t[permission]: %d\t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", target->permissions, target->size, target->uid,target->gid);
+  }
+}
 
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
@@ -1611,7 +1622,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
     }
     //printf("create entry: \t checking entry with fd %d\n", temp->fd);
     if(strcmp(temp->filepath, resultpath) == SUCCESS) {
-      printf("Create entry: file %s already OPENED!!!!\n", resultpath);
+      //printf("Create entry: file %s already OPENED!!!!\n", resultpath);
       return temp;
     }
   }
