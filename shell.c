@@ -49,6 +49,7 @@ int remove_dir(char* filepath);
 int remove_file(char* filepath);
 int cat_file(char* filepath);
 int cat_write_file(char* filepath);
+int redirect_write_file(char** args, int argnum, char* filepath);
 
 // helpers for file system
 void construct_user();
@@ -276,6 +277,7 @@ int cat_write_file(char* filepath) {
   return TRUE;
 }
 
+
 int handle_cd(char* filepath) {
   char temp[MAX_LENGTH];
   strcpy(temp, cwd);
@@ -438,6 +440,91 @@ int getnum(char** args) {
   return count;
 }
 
+int redirect_write_file(char** args, int arg_num, char* filepath) {
+  // open file for read
+  char fspath[MAX_LENGTH];
+  parse_inputpath(filepath, fspath, FALSE);
+  //!!!!!!! needs to chaneg to current user's permission
+  int fildes = f_open(fspath, OPEN_W, RWE);
+  if(fildes == FAIL) {
+    printf("Failed to open file %s\n", filepath);
+    return TRUE;
+  }
+  // read from console
+  char buffer[BLOCKSIZE];
+  char c;
+  int nbytes = sizeof(c);
+  int count = 0;
+  int totalwrite = 0;
+  char command[MAX_LENGTH];
+  strcpy(command, "");
+  for(int i = 0; i < arg_num - 2; i ++) {
+    strcat(command, args[i]);
+    strcat(command, " ");
+  }
+  printf("command is %s\n", command);
+  pid_t pid;
+  int status;
+  pid = fork();
+  if(pid < 0) {
+    printf("Execute command failed - fork failed! \n");
+  } else if (pid == 0) { // children process
+    printf("here in redirect\n");
+    // if(execvp(arg_array[0], arg_array) < 0) {
+    //   perror("Error: ");
+    //   printf("An error occurred during execution, executing command %s failed!\n", args[0]);
+    //}
+    FILE* fp = popen(command, "r");
+    if (fp == NULL) {
+      printf("Error executing command %s\n", command);
+      return TRUE;
+    }
+    char write_buffer[BLOCKSIZE];
+    while(fread(&c, 1, 1, fp) > 0) {
+      buffer[count] = c;
+      count ++;
+      if(count == BLOCKSIZE) {
+        strcpy(write_buffer, buffer);
+        printf("wrte buffer %s\n", write_buffer);
+        if(f_write(write_buffer, BLOCKSIZE, fildes) != BLOCKSIZE)  {
+          printf("Write file %s failed\n", filepath);
+          return TRUE;
+        }
+        count = 0;
+        totalwrite += BLOCKSIZE;
+        bzero(buffer, BLOCKSIZE);
+      }
+  }
+  if(count > 0) {
+    strcpy(write_buffer, buffer);
+    printf("wrte buffer %s\n", write_buffer);
+    if(f_write(write_buffer, count, fildes) != count)  {
+        printf("Write file %s failed\n", filepath);
+        return TRUE;
+    }
+    totalwrite += count;
+  }
+  printf("buffer is %s\n", write_buffer);
+  status = pclose(fp);
+  printf("Write  %d bytes\n", totalwrite);
+  f_close(fildes);
+  printf("End of f_close\n");
+    free(args);
+    exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/
+  
+  
+  
+  } else if (pid > 0) {
+    pid_t res = wait(&status);
+    if(res < 0) {
+      printf("Child %d is not waited by the parent\n", pid);
+    }
+  }
+  return TRUE;
+}
+
+
+
 // execute command line inputs
 int exec_args(char** args, char*input, int free_args) {
   if(strcmp(args[0], "exit") == SUCCESS) {
@@ -450,9 +537,7 @@ int exec_args(char** args, char*input, int free_args) {
 
   int value = FALSE;
   int argnum = getnum(args);
-  if(argnum >= 3 && strcmp(args[argnum - 2], ">") == SUCCESS) {
-    value = cat_write_file(args[argnum - 1]);  
-  } else if(args[0][0] == '!') {
+  if(args[0][0] == '!') {
     return execute_history_input(args[0]);
   } else {
     if(strcmp(args[0], "format") == SUCCESS) {
@@ -560,21 +645,25 @@ int exec_args(char** args, char*input, int free_args) {
     }else if(strcmp(args[0], "exit") == SUCCESS) { // if the command is exit
       return 0;
     } else {
-      pid_t pid;
-      int status;
-      pid = fork();
-      if(pid < 0) {
-	      printf("Execute command failed - fork failed! \n");
-      } else if (pid == 0) { // children process
-        if(execvp(args[0], args) < 0) {
-          printf("An error occurred during execution, executing command %s failed!\n", args[0]);
-        }
-        free(args);
-        exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/
-      } else if (pid > 0) {
-        pid_t res = wait(&status);
-        if(res < 0) {
-          printf("Child %d is not waited by the parent\n", pid);
+      if(strcmp(args[argnum - 2], ">") == SUCCESS) {
+        return redirect_write_file(args, argnum, args[argnum - 1]);  
+      } else {
+        pid_t pid;
+        int status;
+        pid = fork();
+        if(pid < 0) {
+          printf("Execute command failed - fork failed! \n");
+        } else if (pid == 0) { // children process
+          if(execvp(args[0], args) < 0) {
+            printf("An error occurred during execution, executing command %s failed!\n", args[0]);
+          }
+          free(args);
+          exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/
+        } else if (pid > 0) {
+          pid_t res = wait(&status);
+          if(res < 0) {
+            printf("Child %d is not waited by the parent\n", pid);
+          }
         }
       }
       value = TRUE;
