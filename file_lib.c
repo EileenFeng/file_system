@@ -671,7 +671,7 @@ int f_remove(char* filepath, int empty_dir) {
   int* levelthree = (int*)malloc(BLOCKSIZE);
   if(filesize > 0) {
     bzero(levelone, BLOCKSIZE);
-    int i3offset = cur_disk.data_region_offset = target->i3block * BLOCKSIZE;
+    int i3offset = cur_disk.data_region_offset + target->i3block * BLOCKSIZE;
     lseek(cur_disk.diskfd, i3offset, SEEK_SET);
     if(read(cur_disk.diskfd, levelone, BLOCKSIZE) != BLOCKSIZE) {
       printf("f_remove:   333 read in level one table failed in i3block\n");
@@ -705,16 +705,20 @@ int f_remove(char* filepath, int empty_dir) {
 
 
     // levelone
+    printf("data regioin offsert is %d\n", cur_disk.data_region_offset);
     for(int i = 0; i < TABLE_ENTRYNUM; i++) {
       if(filesize <= 0) {
         break;
       }
       int level2_index = levelone[i];
-      int level2_offset = cur_disk.data_region_offset + level2_index * BLOCKSIZE;
+      long level2_offset = cur_disk.data_region_offset + (long)(level2_index * BLOCKSIZE);
       lseek(cur_disk.diskfd, level2_offset, SEEK_SET);
       bzero(leveltwo, BLOCKSIZE);
-      if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
-        printf("f_remove:  33333 read in LEVEL TWO data table failed in i3block\n");
+      printf("data offset %d index is %d offset is %ld\n", cur_disk.data_region_offset, level2_index, level2_offset);
+      //if(read(cur_disk.diskfd, leveltwo, BLOCKSIZE) != BLOCKSIZE) {
+      int readin = read(cur_disk.diskfd, leveltwo, BLOCKSIZE);
+      if(readin != BLOCKSIZE){
+        printf("f_remove:  33333 read in LEVEL TWO data table failed in i3block %d\n", readin);
         free_inode(target->inode_index);
         free(parse_path);
         free(target_file);
@@ -2575,7 +2579,6 @@ int print_free() {
 		char buffer[BLOCKSIZE];
 		if (read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
 			printf("getnextfree:    get next free Offset failed. \n");
-			free(buffer);
 			return FAIL;
 		}
 		struct free_block* oldhead = (struct free_block*)buffer;
