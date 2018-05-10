@@ -1,5 +1,5 @@
 CC = gcc
-FLAGS = -Wall -g
+FLAGS = -Wall -g -O2
 
 all: libfilesys.so format testinit testmkdir mysh
 

@@ -4,7 +4,7 @@
 #include <assert.h>
 #include "file_lib.h"
 #include "fs_struct.h"
-#define WRITEBYTE 67840
+#define WRITEBYTE 167840
 //#define WRITEBYTE 512
 
 int main() {
@@ -63,7 +63,7 @@ int main() {
 
   printf("\n\n\n________+++++++++++++ f_read _________________\n");
   int result_buffer[WRITEBYTE];
-  bzero(result_buffer, WRITEBYTE);
+  bzero(result_buffer, WRITEBYTE*4);
   f_seek(newnew_fd, 0, SEEKSET);
 
   f_read(result_buffer,WRITEBYTE * 4, newnew_fd);
