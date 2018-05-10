@@ -126,31 +126,6 @@ int handle_ls(char* filepath, int flags) {
       }else if(temp->type == REG) {
         printf("[filename]: %s\n", temp->filename);
 	  }
-
-      /*
-      int fd = FAIL;
-      if(temp->type == DIR) {
-	fd = f_opendir(childpath);
-      } else if (temp->type == REG) {
-	fd = f_open(childpath, R, R);
-      } else {
-	printf("Command 'ls' failed\n");
-	return TRUE;
-      }
-      if(fd == FAIL) {
-	printf("Open directory for 'ls' failed\n");
-	return TRUE;
-      }
-      struct fst* st = (struct fst*)malloc(sizeof(struct fst));
-      f_stat(fd, st);
-      if(st->type == DIR) {
-        printf("[type]: DIR\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
-      } else if (st->type == REG) {
-        printf("[type]: REG\t[permission]: %d\t [filename]: %s\t [filesize]: %d \t[uid]: %d\t [gid]: %d \n", st->permission, temp->filename, st->filesize, st->uid, st->gid);
-      }
-      f_closedir(fd);
-      free(st);
-      */
     } else {
       printf("%s\t", temp->filename);
     }
@@ -449,6 +424,8 @@ int redirect_write_file(char** args, int arg_num, char* filepath) {
   if(fildes == FAIL) {
     printf("Failed to open file %s\n", filepath);
     return TRUE;
+  } else {
+    printf("redirect opened %s with fd %d\n", filepath, fildes);
   }
   // read from console
   char buffer[BLOCKSIZE];
@@ -463,63 +440,40 @@ int redirect_write_file(char** args, int arg_num, char* filepath) {
     strcat(command, " ");
   }
   printf("command is %s\n", command);
-  pid_t pid;
-  int status;
-  pid = fork();
-  if(pid < 0) {
-    printf("Execute command failed - fork failed! \n");
-  } else if (pid == 0) { // children process
-    printf("here in redirect\n");
-    // if(execvp(arg_array[0], arg_array) < 0) {
-    //   perror("Error: ");
-    //   printf("An error occurred during execution, executing command %s failed!\n", args[0]);
-    //}
-    FILE* fp = popen(command, "r");
-    if (fp == NULL) {
-      printf("Error executing command %s\n", command);
-      return TRUE;
-    }
-    char write_buffer[BLOCKSIZE];
-    while(fread(&c, 1, 1, fp) > 0) {
-      buffer[count] = c;
-      count ++;
-      if(count == BLOCKSIZE) {
-        strcpy(write_buffer, buffer);
-        printf("wrte buffer %s\n", write_buffer);
-        if(f_write(write_buffer, BLOCKSIZE, fildes) != BLOCKSIZE)  {
-          printf("Write file %s failed\n", filepath);
-          return TRUE;
-        }
-        count = 0;
-        totalwrite += BLOCKSIZE;
-        bzero(buffer, BLOCKSIZE);
-      }
+  printf("here in redirect\n");
+  printf("command is %s\n", command);
+  FILE* fp = popen(command, "r");
+  if (fp == NULL) {
+    printf("Error executing command %s\n", command);
+    return TRUE;
   }
+  printf("1\n");
+  while(fread(&c, 1, 1, fp) > 0) {
+    buffer[count] = c;
+    count ++;
+    if(count == BLOCKSIZE) {
+      if(f_write(buffer, BLOCKSIZE, fildes) != BLOCKSIZE)  {
+	printf("Write file %s failed\n", filepath);
+	return TRUE;
+      }
+      count = 0;
+      totalwrite += BLOCKSIZE;
+      bzero(buffer, BLOCKSIZE);
+    }
+  }
+  
+  int status = pclose(fp);
   if(count > 0) {
-    strcpy(write_buffer, buffer);
-    printf("wrte buffer %s\n", write_buffer);
-    if(f_write(write_buffer, count, fildes) != count)  {
-        printf("Write file %s failed\n", filepath);
-        return TRUE;
+    if(f_write(buffer, count, fildes) != count)  {
+      printf("Write file %s failed\n", filepath);
+      return TRUE;
     }
     totalwrite += count;
   }
-  printf("buffer is %s\n", write_buffer);
-  status = pclose(fp);
   printf("Write  %d bytes\n", totalwrite);
   f_close(fildes);
   printf("End of f_close\n");
-    free(args);
-    exit(0); // usage of exit referrence to: https://brennan.io/2015/01/16/write-a-shell-in-c/
-  
-  
-  
-  } else if (pid > 0) {
-    pid_t res = wait(&status);
-    if(res < 0) {
-      printf("Child %d is not waited by the parent\n", pid);
-    }
-  }
+  free(args);
   return TRUE;
 }
 
@@ -645,9 +599,11 @@ int exec_args(char** args, char*input, int free_args) {
     }else if(strcmp(args[0], "exit") == SUCCESS) { // if the command is exit
       return 0;
     } else {
-      if(strcmp(args[argnum - 2], ">") == SUCCESS) {
-        return redirect_write_file(args, argnum, args[argnum - 1]);  
-      } else {
+      if(argnum >= 3) {
+	if(strcmp(args[argnum - 2], ">") == SUCCESS) {
+	  return redirect_write_file(args, argnum, args[argnum - 1]);  
+	}
+      }else {
         pid_t pid;
         int status;
         pid = fork();

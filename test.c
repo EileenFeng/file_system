@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "file_lib.h"
-#include "fs_struct.h"
+//#include "fs_struct.h"
 #define WRITEBYTE 167840
 //#define WRITEBYTE 512
 

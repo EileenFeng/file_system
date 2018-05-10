@@ -1228,14 +1228,12 @@ int f_write(void* buffer, int bsize, int fd) {
       //2. call get_next_boffset, which will update datatable and entry, and inode when applciable
       ////not need 3. update file entry's block_index ++, blockoffset to return valueof getnextboffset, and offset = 0
     } else {
-      printf("f_write:    final block to write.\n");
       int cur_write_bytes = byte_to_write;
       void* cur_buffer = buffer + (bsize - byte_to_write);
       // hard code:
       //printf("fwriteL hahahhaha buffer: %d\n", ((int*)cur_buffer)[0]);
 
       //printf("f_write:     cur data block offset %d offset %d and inode last block offset %d and size %d\n", writeto->block_offset, writeto->offset, write_inode->last_block_offset, write_inode->size);
-      printf("f_write:   bsize %d     cur_write_bytes is %d\n", bsize, cur_write_bytes);
       int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
       lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
       if(write(cur_disk.diskfd, cur_buffer, cur_write_bytes) != cur_write_bytes) {
