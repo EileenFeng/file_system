@@ -69,7 +69,8 @@ static void scope(char* name);
 int f_mount(char* sourcepath) {
   // open disk
   strcpy(disk_img, sourcepath);
-  cur_disk.diskfd = open(sourcepath, O_RDWR);
+  cur_disk.diskfd = open("DISK", O_RDWR);
+  cur_disk.uid = 0;
   if (cur_disk.diskfd == FAIL) {
     printf("Open disk image failed.\n");
     return FAIL;
@@ -90,6 +91,7 @@ int f_mount(char* sourcepath) {
     free(buffer);
     return FAIL;
   }
+
   struct superblock* temp = (struct superblock*)buffer;
   cur_disk.sb.blocksize = temp->blocksize;
   cur_disk.sb.inode_offset = temp->inode_offset;
@@ -897,7 +899,7 @@ int f_read(void* buffer, int bsize, int fd) {
 
 
 
-int f_stat(int fd, struct fStat* st) {
+int f_stat(int fd, struct fst* st) {
   struct file_table_entry* entry = open_ft->entries[fd];
   if(entry == NULL) {
     printf("f_stat:     Invalid file descriptor\n");
@@ -1309,7 +1311,7 @@ int f_close(int fd) {
       }
     }
   }
-  printf("7\n");
+  printf("7 parent filepath is %s\n", filepath);
   if(parent_entry == NULL) {
     printf("f_close:    parent directory is already close. Something went wrong...\n");
     return FAIL;
@@ -1327,7 +1329,7 @@ int f_close(int fd) {
   // update file table
   open_ft->free_id[fd] = fd;
   open_ft->free_fd_num ++;
-  open_ft->filenum ++;
+  open_ft->filenum --;
   open_ft->entries[fd] = NULL;
   return SUCCESS;
 }
@@ -1346,10 +1348,10 @@ int f_closedir(int dir_fd) {
   }
   printf("f_closedir:   closing directory %s\n", entry->filepath);
   printf("in open close dir before fclose\n");
-  print_openft();
+  //print_openft();
   f_close(dir_fd);
   printf("in open close dir aaafer fclose\n");
-  print_openft(); 
+  //print_openft(); 
   printf("f_closedir: end of calling 'f_close'\n");
   return SUCCESS;
 }
@@ -1446,12 +1448,13 @@ int f_rmdir(char* filepath) {
   }
   f_rewind(dir_fd);
   printf("first time\n");
-  print_openft();
+  //print_openft();
   f_remove(filepath, TRUE);
   printf("second time\n");
-  print_openft(); 
+  //print_openft(); 
+  printf("first time\n");
   f_closedir(dir_fd);
-  print_openft();
+  //print_openft();
 }
 
 int f_unmount() {
@@ -1490,11 +1493,12 @@ int print_openft(){
 static char** parse_filepath(char* filepath) {
   char delim[2] = "/";
   int len = 20;
-  int size = 20;
+  int size = 50;
   int count = 0;
   char file_path[MAX_LENGTH];
   strcpy(file_path, filepath);
   char** parse_result = (char**)malloc(sizeof(char*) * size);
+  bzero(parse_result, size * sizeof(char*));
   char* token;
   printf("parse file path: filepath is %s\n", filepath);
   token = strtok(file_path, delim);
@@ -1640,7 +1644,7 @@ static struct file_table_entry* create_entry(int parent_fd, int child_inode, cha
   result->fd = open_ft->free_id[freefd_index];
   open_ft->free_id[freefd_index] = UNDEFINED;
   update_ft(result, freefd_index);
-  //parent_entry->open_num ++;
+  parent_entry->open_num ++;
   //open_ft->entries[result->fd] = result;
   return result;
 }
@@ -2577,7 +2581,7 @@ int print_free() {
 		struct free_block* oldhead = (struct free_block*)buffer;
 		fb = oldhead->next_free;
 	}
-	printf("*********Totol free blocks: %d\n\n", count);
+	printf("\n__________________ Totol free blocks: %d ________________\n\n", count);
 	return count;
 }
 
