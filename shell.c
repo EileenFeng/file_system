@@ -450,7 +450,9 @@ int exec_args(char** args, char*input, int free_args) {
 
   int value = FALSE;
   int argnum = getnum(args);
-  if(args[0][0] == '!') {
+  if(argnum >= 3 && strcmp(args[argnum - 2], ">") == SUCCESS) {
+    value = cat_write_file(args[argnum - 1]);  
+  } else if(args[0][0] == '!') {
     return execute_history_input(args[0]);
   } else {
     if(strcmp(args[0], "format") == SUCCESS) {
