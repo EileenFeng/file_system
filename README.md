@@ -16,6 +16,7 @@
     - ls: supports '-F' and '-l' flags
     - mkdir: supports 'mkdir <dir_name>', does not support entering permission of the directory created
     - rmdir: works when entering the corret path;
+    - chmod: Not yet implemented.... 
     - cd: mostly works
     - pwd: mostly works
     - cat: mostly works with decent size files (large files that reaches 'i3block' level might have issues because of 'f_read' and 'f_write'
@@ -29,4 +30,5 @@
   - Have Issues with 'f_read' and 'f_write' with large files, especially when reaches 'i3block' level
   - Small number of free blocks is lost after removing files. This is a corner cases that failed to be handled: When a file is removed, the corresponding 'dirent' is removed from the parent directory. At this point, if the parent directory becomes empty, the data block that it used to store the dirent for deleted files will be lost. Same cases applys when the parent directory is extremely large and reachs hight levels: 'indirect', 'i2block', 'i3block'.
   - Does not support changing permissions
+  - Memory Leaks: a lot... Did not have enough time to handle.... :( (really sad face)
   
