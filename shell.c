@@ -61,11 +61,25 @@ int unmount();
 /************************ FUNCTIONS ****************************/
 int mount_disk(char* mounting_point) {
   strcpy(mounted_point, mounting_point);
+  /*
+  strcpy(cwd, mounting_point);
+  char fspath[MAX_LENGTH];
+  parse_inputpath(mounting_point, fspath, FALSE);
+  printf("fs path is %s\n", fspath);
+  f_mkdir(fspath, DEFAULT_PERM);
+  printf("mounted?\n");
+  */
   if(mounted_point[strlen(mounted_point) - 1] != '/') {
     strcat(mounted_point, "/");
   }
   // needs to do user login, and when call fucntions on files need to check permission
   int ret = f_mount(mounting_point);
+  strcpy(cwd, mounting_point);
+  char fspath[MAX_LENGTH];
+  parse_inputpath(mounting_point, fspath, FALSE);
+  printf("fs path is %s\n", fspath);
+  f_mkdir(fspath, DEFAULT_PERM);
+  printf("mounted?\n");             
   //strcpy(cwd, mounting_point);
   return ret == SUCCESS;
 }
@@ -498,7 +512,7 @@ int exec_args(char** args, char*input, int free_args) {
       strncpy(temp, mounted_point, strlen(mounted_point) - 1);
       temp[strlen(mounted_point) - 1] = '\0';
       strcat(temp, cwd);
-      printf("%s\n", temp);
+      printf("%s\n", cwd);
       value = TRUE;
     } else if (strcmp(args[0], "cat") == SUCCESS) {
       if(argnum < 2) {

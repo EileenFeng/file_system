@@ -1,3 +1,4 @@
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -1379,7 +1380,7 @@ int f_mkdir(char* filepath, int mode) {
       free_parse(parse_path);
       printf("f_mkdir: filepath invalid: file path too long\n");
       return FAIL;
-    }
+    } 
     //if(parent_fd != cur_disk.rootdir_fd){
     strcat(parent_path, "/");
     //}
@@ -1400,10 +1401,8 @@ int f_mkdir(char* filepath, int mode) {
     }
     //printf("f_mkdir:   3:     parent_fd is %d\n", parent_fd);
   }
-  //printf("f_mkdir:  4:     parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
-  //printf("f_mkdir: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
-  f_seek(parent_fd, 0, SEEK_SET);
+  f_seek(parent_fd, 0, SEEKSET);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
   if(target_file != NULL) {
     if(target_file->type == DIR) {
@@ -1549,7 +1548,7 @@ static void free_parse(char** parse_result) {
 
 static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
   f_seek(parentdir_fd, 0, SEEKSET);
-  //printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
+  printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
   //printf("checkdir getting fd %d origin is  NULL? %d\n", parentdir_fd, origin==NULL);
   int org_offset = origin->offset;
