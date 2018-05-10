@@ -39,9 +39,6 @@ int main(int argc, char** argv) {
     int padding_length = BLOCKSIZE - sb_size;
     char sb_padding[padding_length];
     bzero(sb_padding, padding_length);
-    printf("padding length is %d\n", padding_length);
-    printf("super block size is %d\n", sb_size);
-    printf("sum of sb size and padding is %d\n", sb_size + padding_length);
 
     if(fwrite(&sb, 1, sb_size, output_disk) != sb_size) {
         printf("Write superblock failed\n");
@@ -74,7 +71,6 @@ int main(int argc, char** argv) {
     root_inode.i3block = UNDEFINED;
     root_inode.last_block_offset = 0;
     int inode_size = sizeof(struct inode);
-    printf("root inode size is %d and root inodes %d\n", inode_size, sizeof(root_inode));
     if(fwrite(&root_inode, 1, sizeof(root_inode), output_disk) != inode_size) {
         printf("Writing root directory inode failed\n");
         return FAIL;
@@ -100,7 +96,6 @@ int main(int argc, char** argv) {
     home.i2block = UNDEFINED;
     home.i3block = UNDEFINED;
     home.last_block_offset = 1;
-    printf("home inode size is %d and root inodes %d\n", inode_size, sizeof(home));
     if(fwrite(&home, 1, sizeof(home), output_disk) != inode_size) {
         printf("Writing home directory inode failed\n");
         return FAIL;
@@ -124,7 +119,6 @@ int main(int argc, char** argv) {
     super_user.i2block = UNDEFINED;
     super_user.i3block = UNDEFINED;
     super_user.last_block_offset = UNDEFINED;
-    printf("super_user inode size is %d and root inodes %d\n", inode_size, sizeof(super_user));
     if(fwrite(&super_user, 1, sizeof(super_user), output_disk) != inode_size) {
         printf("Writing super user directory inode failed\n");
         return FAIL;
@@ -148,7 +142,6 @@ int main(int argc, char** argv) {
     reg_user.i2block = UNDEFINED;
     reg_user.i3block = UNDEFINED;
     reg_user.last_block_offset = UNDEFINED;
-    printf("reg_user inode size is %d and root inodes %d\n", inode_size, sizeof(reg_user));
     if(fwrite(&reg_user, 1, sizeof(reg_user), output_disk) != inode_size) {
         printf("Writing reg_user directory inode failed\n");
         return FAIL;
@@ -157,7 +150,6 @@ int main(int argc, char** argv) {
 
     // write the rest of inodes
     int inode_num = (sb.data_offset - sb.inode_offset) * BLOCKSIZE / sizeof(struct inode);
-    printf("Number of inodes is %d\n", inode_num);
     for(int i = INODE_SETUP; i < inode_num; i++) {
         struct inode temp_free;
         temp_free.inode_index = i;
@@ -165,7 +157,6 @@ int main(int argc, char** argv) {
         temp_free.permissions = 777;
         temp_free.type = UNDEFINED;
         temp_free.next_free_inode = i + 1 >= inode_num ? END : i+1;
-        printf("temp_free next is %d for inode %d\n", temp_free.next_free_inode, i);
         temp_free.nlink = 0;
         temp_free.size = 0;
         temp_free.uid = UNDEFINED;
@@ -183,7 +174,6 @@ int main(int argc, char** argv) {
             printf("Write free inode %d failed\n", i);
             return FAIL;
         }
-        printf("Finish writing free inode %d\n", i);
     }
     // write root block data block
     void* buffer = malloc(BLOCKSIZE);
@@ -192,12 +182,9 @@ int main(int argc, char** argv) {
     homedir->type = DIR;
     homedir->inode_index = HOME_INDEX;
     strcpy(homedir->filename, "home");
-    printf("copying home %s\n", homedir->filename);
     if(fwrite(buffer, 1, BLOCKSIZE, output_disk) != BLOCKSIZE) {
         printf("write root dir data block failed\n");
     }
-
-    printf("root data block contains: %s\n", homedir->filename);
 
     // write home dir data block
     bzero(buffer, BLOCKSIZE);
@@ -217,38 +204,15 @@ int main(int argc, char** argv) {
     //writing the rest of blocks
     for (int i = 2; i < BLOCKNUM; i++) {
         struct free_block fb;
-        printf("free block size is %d\n", sizeof(struct free_block));
         fb.next_free = i+1 >= BLOCKNUM ? END : i+1;
-        printf("free block %d next free is %d\n", i, fb.next_free);
         bzero(fb.padding, FREEB_PADDING);
         if(fwrite(&fb, 1, sizeof(fb), output_disk) != sizeof(fb)) {
             printf("Write free block %d failed\n", i);
             return FAIL;
         }
-        printf("Finish writing free block %d\n", i);
     }
 
     fclose(output_disk);
-
-
-    FILE* test = fopen("DISK", "rb");
-    char boot[512];
-    fread(boot, 1, 512, test);
-    char super[512];
-    fread(super, 1, 512, test);
-    char inode[1536*3];
-    fread(inode, 1, 1536*3, test);
-    char datablock[1536];
-    fread(datablock, 1, 1536, test);
-    struct superblock* sbtest = (struct superblock*)super;
-    printf("testing super block %d\n", sbtest->free_inode_head);
-    struct inode* roott = (struct inode*)inode;
-    printf("testing inode %d\n", (roott+1)->size);
-    //struct dirent* testf = (struct dirent*)(datablock + 512);
-    //printf("dirent testt %s\n", testf->filename);
-    fclose(test);
-
-
     return SUCCESS;
 
 }

@@ -1,6 +1,6 @@
 #ifndef FILE_LIB_H_
 #define FILE_LIB_H_
-//#include "fs_struct.h"
+#include "fs_struct.h"
 
 // library functions
 int f_mount(char* sourcepath); //done
@@ -23,23 +23,8 @@ int f_closedir(int dir_fd);// need to test
 int f_mkdir(char* filepath, int mode); // done
 int f_rmdir(char* filepath);
 int f_unmount();
-/*
-f_closedir
-:  close an open directory file
-12.
-f_mkdir
-:  make a new directory at the specified location
-13.
-f_rmdir
-:  delete a specified directory.  Be sure to remove entire contents and the contents of
-all subdirectorys from the filesystem.  Do NOT simply remove pointer to directory.
-14.
-f_mount
-:  mount a specified file system into your directory tree at a specified location.
-15.
-f_umount
-:  unmount a specified file system
 
-*/
+// helper for shell
+void get_inode(int inode_index);
 
 #endif

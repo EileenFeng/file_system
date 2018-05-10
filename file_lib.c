@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
-#include "fs_struct.h"
+//#include "fs_struct.h"
 #include "file_lib.h"
 
 /* needs to free
@@ -22,7 +22,6 @@
 
 /*********** GLOBALS ************/
 // check whether library has been initialized
-static int init_lib = FALSE;
 static char disk_img[20];
 static struct fs_disk cur_disk;
 //int disk_fd = UNDEFINED;
@@ -65,7 +64,8 @@ static int remove_dirent(int parent_fd, int parent_inode, int child_inode);
 static int free_inode(int inode_index);
 static int print_free();
 static void scope(char* name);
-
+static int check_permission(struct inode* target, int access);
+void get_inode(int inode_index);
 /************************ LIB FUNCTIONS *****************************/
 
 int f_mount(char* sourcepath) {
@@ -359,8 +359,8 @@ struct dirent* f_readdir(int dir_fd) {
 
 /*********************** FILE functions ***********************/
 int f_remove(char* filepath, int empty_dir) {
-  char name[320] __attribute__((cleanup(scope)));
-  sprintf(name, "f_remove:%s", filepath);
+  //char name[320] __attribute__((cleanup(scope)));
+  //sprintf(name, "f_remove:%s", filepath);
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
@@ -870,7 +870,7 @@ int f_read(void* buffer, int bsize, int fd) {
 
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   get_tables(entry, datatable);
-  int end_offset = (BLOCKSIZE - entry->offset) % BLOCKSIZE;
+  //int end_offset = (BLOCKSIZE - entry->offset) % BLOCKSIZE;
   int bytes_toread = bsize;
   while(bytes_toread > 0) {
     //printf("Currently block offset %d  and offset %d and index %d\n", entry->block_offset, entry->offset, entry->block_index);
@@ -1152,8 +1152,8 @@ int f_open(char* filepath, int access, int mode) {
 
 
 int f_write(void* buffer, int bsize, int fd) {
-  char name[20] __attribute__((cleanup(scope)));
-  sprintf(name, "f_write:%d ",fd);
+  //char name[20] __attribute__((cleanup(scope)));
+  //sprintf(name, "f_write:%d ",fd);
   struct file_table_entry* writeto = open_ft->entries[fd];
   if(writeto == NULL) {
     printf("f_write:    invalid file descriptor\n");
@@ -1424,14 +1424,10 @@ int f_mkdir(char* filepath, int mode) {
 
 
 int f_rmdir(char* filepath) {
-  char name[320] __attribute__((cleanup(scope)));
-  sprintf(name, "f_rmdir<%s>\n",filepath);
   int dir_fd = f_opendir(filepath);
   f_rewind(dir_fd);
   struct dirent* cur_dir = f_readdir(dir_fd);
-  //printf("start removing!!!!\n");
   while(cur_dir != NULL) {
-    //printf("\n\n @@@@@@@@ f_rmdir:    currently handling %s\n", cur_dir->filename);
     if(cur_dir->type == REG) {
       char childpath[MAX_LENGTH];
       strcpy(childpath, filepath);
@@ -1446,19 +1442,13 @@ int f_rmdir(char* filepath) {
       printf("f_rmdir:  removing directory file %s\n", childpath);
       f_rmdir(childpath);
     }
-    //printf("f_rmdir   get next one\n");
     free(cur_dir);
     cur_dir = f_readdir(dir_fd);
   }
   f_rewind(dir_fd);
-  //printf("first time\n");
-  //print_openft();
   f_remove(filepath, TRUE);
-  //printf("second time\n");
-  //print_openft();
-  //printf("first time\n");
   f_closedir(dir_fd);
-  //print_openft();
+  return SUCCESS;
 }
 
 int f_unmount() {
@@ -1466,22 +1456,17 @@ int f_unmount() {
     1. free all entries int open file table
     2. free open file table
   */
-  //printf("f_unmont:   Open file num %d\n", open_ft->filenum);
   for(int i = 0; i < MAX_OPENFILE; i++) {
     struct file_table_entry* temp = open_ft->entries[i];
     if(temp != NULL) {
-      //printf("%d Freeing ", i);
-      //printf("%s\n",temp->filepath);
       free(temp);
-      //printf("%d after free!\n", i);
-    } //else {
-      //printf("%d is NULL\n", i);
-    //}
+    } 
   }
   free(open_ft);
   free(cur_disk.inodes);
   bzero(&(cur_disk.sb), sizeof(struct superblock));
   bzero(&(cur_disk), sizeof(struct fs_disk));
+  return SUCCESS;
 }
 
 /*************************** HELPER FUNCTIONS **********************/
@@ -1548,7 +1533,7 @@ static void free_parse(char** parse_result) {
 
 static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
   f_seek(parentdir_fd, 0, SEEKSET);
-  printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
+  //printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
   //printf("checkdir getting fd %d origin is  NULL? %d\n", parentdir_fd, origin==NULL);
   int org_offset = origin->offset;
@@ -1599,6 +1584,7 @@ static int get_free_fd_index() {
       return i;
     }
   }
+  return FAIL;
 }
 
 static struct file_table_entry* create_entry(int parent_fd, int child_inode, char* childpath, int access, int type){
@@ -1690,7 +1676,7 @@ static int create_file(int parent_fd, char* newfile_name, int type, int permissi
   write_disk_inode();
   write_disk_sb();
   //printf("create file:    before seeking!!\n");
-  int seek_res = f_seek(parent_fd, 0, SEEKEND);
+  f_seek(parent_fd, 0, SEEKEND);
   //printf("create file:    aaaaaafter SEEKING result is %d\n", seek_res);
   struct dirent new_dirent;
   bzero(&new_dirent, sizeof(struct dirent));
@@ -1698,7 +1684,7 @@ static int create_file(int parent_fd, char* newfile_name, int type, int permissi
   new_dirent.inode_index = new_inode_index;
   strcpy(new_dirent.filename, newfile_name);
   //printf("create_file:      nnnnnnnnn file name is %s\n", new_dirent.filename);
-  int write = f_write(&new_dirent, sizeof(struct dirent), parent_fd);
+  f_write(&new_dirent, sizeof(struct dirent), parent_fd);
   //printf("create file:      wrote %d bytes\n", write);
   return new_inode_index;
 }
@@ -2385,6 +2371,7 @@ static int get_next_boffset(struct table* t, struct file_table_entry* en) {
     //printf("get next boffset:   This is not possible\n");
     return FAIL;
   }
+  return FAIL;
 }
 
 static void free_struct_table(struct table* t) {
@@ -2495,10 +2482,10 @@ static int remove_dirent(int parent_fd, int parent_inode, int child_inode) {
   struct table* datatable = malloc(sizeof(struct table));
   get_tables(parent_entry, datatable);
   parentinode->last_block_offset = datatable->cur_data_table[datatable->intable_index];
-
+  return SUCCESS;
 }
 
-int check_permission(struct inode* target, int access) {
+static int check_permission(struct inode* target, int access) {
   if(target->permissions == R) {
     if(access != OPEN_R) {
       return FAIL;
@@ -2517,9 +2504,10 @@ int check_permission(struct inode* target, int access) {
       return FAIL;
     }
   }
+  return SUCCESS;
 }
 
-int print_free() {
+static int print_free() {
   int count = 0;
   int fb = cur_disk.sb.free_block_head;
   while (fb != FAIL) {
@@ -2539,6 +2527,6 @@ int print_free() {
 }
 
 void scope(char* name) {
-  printf("\n**********%s finishes\n", name);
-  print_free();
+  //printf("\n**********%s finishes\n", name);
+  //print_free();
 }

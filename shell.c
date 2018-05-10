@@ -7,7 +7,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include "file_lib.h"
-#include "fs_struct.h"
+//#include "fs_struct.h"
 
 #define HISTSIZE 5 // set to default size
 #define LFLAG 1
@@ -69,17 +69,24 @@ int mount_disk(char* mounting_point) {
   f_mkdir(fspath, DEFAULT_PERM);
   printf("mounted?\n");
   */
+  if(access("./DISK", F_OK) == FAIL) {
+    printf("No disk to mount. Please type in format to form a disk!\n");
+    return TRUE;
+  }
+
+  
   if(mounted_point[strlen(mounted_point) - 1] != '/') {
     strcat(mounted_point, "/");
   }
   // needs to do user login, and when call fucntions on files need to check permission
   int ret = f_mount(mounting_point);
-  strcpy(cwd, mounting_point);
   char fspath[MAX_LENGTH];
   parse_inputpath(mounting_point, fspath, FALSE);
-  printf("fs path is %s\n", fspath);
   f_mkdir(fspath, DEFAULT_PERM);
-  printf("mounted?\n");             
+  if(mounting_point[0] != '/') {
+    strcat(cwd, "/");
+  }
+  strcat(cwd, mounting_point);
   //strcpy(cwd, mounting_point);
   return ret == SUCCESS;
 }
@@ -218,7 +225,7 @@ int cat_file(char* filepath) {
   int readfile = f_read((void*)buffer, st->filesize, filefd);
   printf("Read %d bytes\n", readfile);
   if(readfile == FAIL) {
-    printf("Read from file %s failed\n");
+    printf("Read from file %s failed\n", filepath);
     return TRUE;
   }
   write(wfd, buffer, st->filesize);
@@ -512,7 +519,11 @@ int exec_args(char** args, char*input, int free_args) {
       strncpy(temp, mounted_point, strlen(mounted_point) - 1);
       temp[strlen(mounted_point) - 1] = '\0';
       strcat(temp, cwd);
-      printf("%s\n", cwd);
+      if(strlen(cwd) == 0) {
+	printf("/\n");
+      } else {
+	printf("%s\n", cwd);
+      }
       value = TRUE;
     } else if (strcmp(args[0], "cat") == SUCCESS) {
       if(argnum < 2) {
@@ -743,13 +754,15 @@ int main(int argc, char** argv) {
     scanf("%s", password);
     if(strcmp(username, reg_user.username) == SUCCESS) {
       if(strcmp(password, reg_user.password) == SUCCESS) {
-        printf("Successfully logged in!\n");
+        printf("Successfully logged in as regular user!\n");
+	strcpy(cwd, "/home/rusr");
         loggedin = TRUE;
       }
     }
     if(strcmp(username, spr_user.username) == SUCCESS) {
       if(strcmp(password, spr_user.password) == SUCCESS) {
-        printf("Successfully logged in!\n");
+        printf("Successfully logged in as super user!\n");
+	strcpy(cwd, "/home/susr");
         loggedin = TRUE;
       }
     }
