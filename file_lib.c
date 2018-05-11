@@ -228,7 +228,7 @@ struct dirent* f_readdir(int dir_fd) {
   // printf("Readdir: file offset readdir: %d\n", file_offset);
   //printf("Readdir: file size is %d\n", temp_inode->size);
   if(file_offset >= temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
-    //    printf("Readdir: End of file\n");
+    //printf("Readdir: End of file\n");
     return NULL;
   }
   lseek(cur_disk.diskfd, file_offset, SEEK_SET);
@@ -896,11 +896,11 @@ int f_read(void* buffer, int bsize, int fd) {
         return FAIL;
       }
       free_struct_table(datatable);
-      return bsize;
+      return bsize - bytes_toread;
     }
   }
   free_struct_table(datatable);
-  return FAIL;
+  return bsize - bytes_toread;
 }
 
 
@@ -982,28 +982,22 @@ int f_seek(int fd, int offset, int whence) {
 
     }
   }else if(whence == SEEKEND) {
-    //printf("s1\n");
     if(offset > cur_inode->size) {
       printf("fseek:    Invalid offset! Seek backwards outside of file range\n");
       return FAIL;
     } else {
-      //printf("s2\n");
       int pos = cur_inode->size - offset;
       entry->block_index = pos / BLOCKSIZE;
       entry->offset = pos % BLOCKSIZE;
       struct table* datatable = (struct table*)malloc(sizeof(struct table));
-      //printf("s3\n");
       get_tables(entry, datatable);
-      //printf("s4\n");
       if(datatable->table_level == NONE) {
 	free_struct_table(datatable);
 	printf("fseek:  file is empty\n");
 	return SUCCESS;
       }
       entry->block_offset = datatable->cur_data_table[datatable->intable_index];
-      //printf("s5\n");
       free_struct_table(datatable);
-      //printf("s6\n");
       return SUCCESS;
     }
   } else {
@@ -1039,7 +1033,6 @@ int f_open(char* filepath, int access, int mode) {
     return FAIL;
   }
 
-  printf("__________________ f_open __________________\n");
   char** parse_path = parse_filepath(filepath);
   int count = 0;
   char* prevdir = NULL;
@@ -1191,6 +1184,10 @@ int f_write(void* buffer, int bsize, int fd) {
 
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   datatable = get_tables(writeto, datatable);
+  if(datatable == NULL) {
+    printf("f_write: Get free blocks for f_write failed\n");
+    return FAIL;
+  }
   int byte_to_write = bsize;
 
   while(byte_to_write > 0) {

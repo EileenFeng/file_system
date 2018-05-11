@@ -48,7 +48,7 @@ int make_dir(char* filepath, char* mode);
 int remove_dir(char* filepath);
 int remove_file(char* filepath);
 int cat_file(char* filepath);
-int cat_write_file(char* filepath);
+int cat_write_file(char* direction, char* filepath);
 int redirect_write_file(char** args, int argnum, char* filepath);
 
 // helpers for file system
@@ -190,32 +190,43 @@ int remove_file(char* filepath) {
 int cat_file(char* filepath) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);
-  int filefd = f_open(fspath, OPEN_R, R);
+  int filefd = f_open(fspath, OPEN_WR, RWE);
   if(filefd == FAIL) {
     printf("Open file %s for read failed\n", filepath);
     return TRUE;
   }
   struct fst* st = (struct fst*)malloc(sizeof(struct fst));
   f_stat(filefd, st);
-  char buffer[st->filesize];
-  int readfile = f_read((void*)buffer, st->filesize, filefd);
-  printf("Read %d bytes\n", readfile);
-  if(readfile == FAIL) {
-    printf("Read from file %s failed\n", filepath);
-    return TRUE;
+  int fsize = st->filesize;
+  while(fsize > 0) {
+    char buffer[BLOCKSIZE];
+    bzero(buffer, BLOCKSIZE);
+    int toread = fsize >= BLOCKSIZE ? BLOCKSIZE : fsize;
+    int readfile = f_read((void*)buffer, toread, filefd);
+    if(readfile == FAIL) {
+      printf("Read from file %s failed\n", filepath);
+      return TRUE;
+    }
+    write(wfd, buffer, toread);
+    fsize -= toread;
   }
-  write(wfd, buffer, st->filesize);
   f_close(filefd);
   free(st);
   return TRUE;
 }
 
-int cat_write_file(char* filepath) {
+int cat_write_file(char* direction, char* filepath) {
   // open file for read
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);
   //!!!!!!! needs to chaneg to current user's permission
-  int fildes = f_open(fspath, OPEN_W, RWE);
+  int fildes = FAIL;
+  if(strcmp(direction, ">>") == SUCCESS) {
+    fildes = f_open(fspath, OPEN_WR, RWE);
+    f_seek(fildes, 0, SEEKEND); 
+  } else {
+    fildes = f_open(fspath, OPEN_W, RWE);
+  }
   if(fildes == FAIL) {
     printf("Failed to open file %s\n", filepath);
     return TRUE;
@@ -238,7 +249,7 @@ int cat_write_file(char* filepath) {
       totalwrite += BLOCKSIZE;
       bzero(buffer, BLOCKSIZE);
     }
-  }
+  } 
   if(count > 0) {
     if(f_write(buffer, count, fildes) != count)  {
         printf("Write file %s failed\n", filepath);
@@ -579,7 +590,7 @@ int exec_args(char** args, char*input, int free_args) {
           value = cat_file(args[1]);
         }
       } else if(argnum == 3) {
-        value = cat_write_file(args[2]);
+        value = cat_write_file(args[1], args[2]);
       } else {
         printf("Invalid Input!\n");
         value = TRUE;
