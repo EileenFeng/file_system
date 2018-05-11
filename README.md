@@ -20,7 +20,8 @@
     - chmod: mostly working, however changing the modes does not affect how users access files. Require the second argument to be the new mode. Requires proper spacing. 
     - cd: mostly works
     - pwd: mostly works
-    - cat: mostly works with decent size files (large files that reaches 'i3block' level might have issues because of 'f_read' and 'f_write' with large files. Support 'cat >> <filename>' for appending. Requires proper spacing. 
+    - cat: mostly works with decent size files (large files that reaches 'i3block' level might have issues because of 'f_read' and 'f_write' with large files. Support 'cat >> <filename>' for appending. Requires proper spacing.
+      - When use redirection (for instance 'yes > y') to create new files, allow some time for the file to be created and updated on disk. 'ls' right after creating a new large file might not show the newly created file because the program needs some time to update the disk. 
     - more: Not implemented... Do not have enough time
     - mount: supports mounting at a specific position. For instance, when a regular user logged in and typed in 'mount eileen', the current working directory of the user, right after mounting, will be at the mounting point, aka 'home/rusr/eileen'. Does not support nested mounting!
     - unmount: mostly works
