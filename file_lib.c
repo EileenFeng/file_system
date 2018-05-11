@@ -201,17 +201,20 @@ int f_opendir(char* filepath) {
     }
     struct file_table_entry* new_entry = create_entry(parent_fd, child_dirent->inode_index, curdir, OPEN_WR, DIR);
     parent_fd = new_entry->fd;
-    //printf("opendir: Next parent dir filepath is %s and fd is %d\n", new_entry->filepath, new_entry->fd);
     count ++;
     curdir = parse_path[count];
     free(child_dirent);
   }
-  //printf("Opendir: return value is %d\n", parent_fd);
+  free_parse(parse_path);
   return parent_fd;
 }
 
 
 struct dirent* f_readdir(int dir_fd) {
+  if(dir_fd < 0) {
+    printf("f_readdir: Invalid file descriptor!\n");
+    return FAIL;
+  }
   struct file_table_entry* target = open_ft->entries[dir_fd];
   if(target == NULL) {
     printf("freaddir: Invalid directory file descriptor for f_readdir\n");
@@ -224,12 +227,8 @@ struct dirent* f_readdir(int dir_fd) {
 
   // read in data
   struct inode* temp_inode = (struct inode*)(cur_disk.inodes + target->inode_index * INODE_SIZE);
-  //printf("Readdir: blockoffset %d, block index %d, offset %d\n", target->block_offset, target->block_index, target->offset);
   int file_offset = cur_disk.data_region_offset + target->block_offset * BLOCKSIZE + target->offset;
-  // printf("Readdir: file offset readdir: %d\n", file_offset);
-  //printf("Readdir: file size is %d\n", temp_inode->size);
   if(file_offset >= temp_inode->size + cur_disk.data_region_offset + temp_inode->dblocks[0] * BLOCKSIZE) {
-    //printf("Readdir: End of file\n");
     return NULL;
   }
   lseek(cur_disk.diskfd, file_offset, SEEK_SET);
@@ -251,109 +250,6 @@ struct dirent* f_readdir(int dir_fd) {
   } else {
     target->offset += DIRENT_SIZE;
   }
-  /*
-    if(new_offset >= BLOCKSIZE) {
-    int new_blockindex = target->block_index + 1;
-    printf("Readdir: Old block offset is %d and new index is %d\n", target->block_offset, target->block_index);
-
-    // set up new block_index
-    if(new_blockindex < N_DBLOCKS) {
-    target->block_offset = temp_inode->dblocks[new_blockindex];
-    } else{
-    void* buffer = malloc(BLOCKSIZE);
-    // one level
-    if (new_blockindex < LEVELONE) {
-    int first_index = (new_blockindex - N_DBLOCKS)/TABLE_ENTRYNUM;
-    int second_index = (new_blockindex - N_DBLOCKS) - first_index * TABLE_ENTRYNUM;
-    printf("Readdir: sum: %d, first index %d, second index %d\n", (new_blockindex - N_DBLOCKS), first_index, second_index);
-    int fileOffset = temp_inode->iblocks[first_index] * BLOCKSIZE + cur_disk.data_region_offset;
-    lseek(cur_disk.diskfd, fileOffset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read index data block failed in f_readdir level one\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-    int* dblocks = (int*)buffer;
-    target->block_offset = dblocks[second_index];
-    printf("Readdir: New block offset is %d\n", target->block_offset);
-    // two level
-    } else if (new_blockindex < LEVELTWO) {
-    int first_index = (new_blockindex - LEVELONE) / TABLE_ENTRYNUM;
-    int second_index = (new_blockindex - LEVELONE) - first_index * TABLE_ENTRYNUM;
-    int i2offset = temp_inode->i2block * BLOCKSIZE + cur_disk.data_region_offset;
-    // read in first block
-    lseek(cur_disk.diskfd, i2offset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read index data block failed in f_readdir level two\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-    // read in the second index block
-    int* dblocks = (int*)buffer;
-    int sec_blockindex = dblocks[first_index];
-    int second_blockoffset = cur_disk.data_region_offset + sec_blockindex * BLOCKSIZE;
-    lseek(cur_disk.diskfd, second_blockoffset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read index data block failed in f_readdir level two\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-    dblocks = (int*)buffer;
-    target->block_offset = dblocks[second_index];
-    printf("Readdir: new block_offset is %d\n", target->block_offset);
-    // three level
-    } else if (new_blockindex < LEVELTHREE) {
-    int first_entry_size = TABLE_ENTRYNUM * TABLE_ENTRYNUM;
-    int first_index = (new_blockindex - LEVELTWO) / first_entry_size;
-    int second_index = ((new_blockindex - LEVELTWO) - first_index * first_entry_size) / TABLE_ENTRYNUM;
-    int third_index = (new_blockindex - LEVELTWO) - first_index * first_entry_size - second_index * TABLE_ENTRYNUM;
-    printf("Readdir: three: first index %d, second %d, third %d\n", first_index, second_index, third_index);
-
-    int i3offset = cur_disk.data_region_offset + temp_inode->i3block * BLOCKSIZE;
-    lseek(cur_disk.diskfd, i3offset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read first index data block failed in f_readdir level three\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-    int* dblocks = (int*)buffer;
-    int block2_index = dblocks[first_index];
-    int block2_offset = cur_disk.data_region_offset + block2_index * BLOCKSIZE;
-    lseek(cur_disk.diskfd, block2_offset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read second index data block failed in f_readdir level two\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-
-    dblocks = (int*)buffer;
-    int block3_index = dblocks[second_index];
-    int block3_offset = cur_disk.data_region_offset + block3_index * BLOCKSIZE;
-    lseek(cur_disk.diskfd, block3_offset, SEEK_SET);
-    if(read(cur_disk.diskfd, buffer, BLOCKSIZE) != BLOCKSIZE) {
-    printf("Readdir: Read third index data block failed in f_readdir level two\n");
-    free(buffer);
-    free(ret);
-    return NULL;
-    }
-    dblocks = (int*)buffer;
-    target->block_offset = dblocks[third_index];
-    printf("Readdir:  new offset is %d\n", target->block_offset);
-    }
-    target->block_index ++;
-    target->offset = new_offset - BLOCKSIZE;
-    free(buffer);
-    }
-    } else {
-    target->offset = new_offset;
-    }
-  */
-  //printf("Readdir:  file name for the ret is %s\n", ret->filename);
   return ret;
 }
 
@@ -370,23 +266,18 @@ int f_remove(char* filepath, int empty_dir) {
   char parent_path[MAX_LENGTH];
   strcpy(parent_path, "");
 
-  //printf("\n\n================ f_remove =======================\n");
   // check whether directories along the filepath exists
   while(curdir != NULL) {
-    //printf("f_remove:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
     // get complete path
     if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
       free_parse(parse_path);
       printf("f_remove: filepath invalid: file path too long\n");
       return FAIL;
     }
-    //if(parent_fd != cur_disk.rootdir_fd){
     strcat(parent_path, "/");
-    //}
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
-    //printf("f_remove:     2:      parent path for fopen is: %s\n", parent_path);
     prevdir = curdir;
     curdir = parse_path[count];
     if(curdir == NULL){
@@ -398,13 +289,9 @@ int f_remove(char* filepath, int empty_dir) {
       free_parse(parse_path);
       return FAIL;
     }
-    //printf("f_remove:   3:     parent_fd is %d\n", parent_fd);
   }
-  //printf("f_remove:  4:     parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
-  //printf("f_remove: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
-  //printf("f-remove 5555 after checkdir\n");
   // cannot remove a not existing file
   if(target_file == NULL) {
     printf("f_remove:    Cannot remove a file that does not exist. \n");
@@ -429,26 +316,20 @@ int f_remove(char* filepath, int empty_dir) {
     5. write the updated inodes and sb back to disk!!!!!
   */
 
-  //printf("f_remove:     AT end of remove, parent file to be close is %s with fd %d and removed file is %s\n", parent_path, parent_fd, filepath);
-
   struct inode* target = (struct inode*)(cur_disk.inodes + target_file->inode_index * INODE_SIZE);
   // 1. free all the data blocks along the way
   int filesize = target->size;
   int* block_buffer = (int*)malloc(BLOCKSIZE);
-  //printf("f_remove:     ssssssssize %d\n", filesize);
   // free dblocks
   if(filesize > 0) {
-    //printf("f_remove        direct       size %d\n", filesize);
     for(int i = 0; i < N_DBLOCKS; i ++) {
       if(filesize > 0) {
-	// printf("f_remove:     1; free direct blocks, cur filesize %d\n", filesize);
         int block_offset = target->dblocks[i];
         // update the free block head
         int oldhead = cur_disk.sb.free_block_head;
         bzero(block_buffer, BLOCKSIZE);
         block_buffer[0] = oldhead;
         cur_disk.sb.free_block_head = block_offset;
-        //printf("f_remove: DIRECT     after add free head is %d\n", cur_disk.sb.free_block_head);
         int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
@@ -459,7 +340,6 @@ int f_remove(char* filepath, int empty_dir) {
           return FAIL;
         }
         filesize -= BLOCKSIZE;
-        //printf("f_remove:     2; direct blocks, updated filesize %d\n", filesize);
       } else {
         break;
       }
@@ -471,6 +351,8 @@ int f_remove(char* filepath, int empty_dir) {
     remove_dirent(parent_fd, target->parent_inode, target->inode_index);
     free_inode(target->inode_index);
     free(block_buffer);
+    free(target_file);
+    free_parse(parse_path);
     return SUCCESS;
   }
 
@@ -499,7 +381,6 @@ int f_remove(char* filepath, int empty_dir) {
       bzero(block_buffer, BLOCKSIZE);
       block_buffer[0] = oldhead;
       cur_disk.sb.free_block_head = datatable_offset;
-      //printf("f_remove: I11NDIRECT     after add free head is %d\n", cur_disk.sb.free_block_head);
       fileoffset = cur_disk.data_region_offset + datatable_offset* BLOCKSIZE;
       lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
       if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
@@ -522,7 +403,7 @@ int f_remove(char* filepath, int empty_dir) {
         block_buffer[0] = oldhead;
         cur_disk.sb.free_block_head = block_offset;
         int fileoffset = cur_disk.data_region_offset + block_offset * BLOCKSIZE;
-        //printf("f_remove: 2; inderiect      after add free head is %d\n", cur_disk.sb.free_block_head);
+
 
         lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
         if(write(cur_disk.diskfd, (void*)block_buffer,BLOCKSIZE) != BLOCKSIZE) {
@@ -533,7 +414,6 @@ int f_remove(char* filepath, int empty_dir) {
           return FAIL;
         }
         filesize -= BLOCKSIZE;
-        //printf("f_remove:     2; indirect blocks, updated filesize %d\n", filesize);
       }
       write_disk_sb();
       if(filesize <= 0) {
@@ -812,7 +692,6 @@ int f_remove(char* filepath, int empty_dir) {
             return FAIL;
           }
           filesize -= BLOCKSIZE;
-          //printf("f_remove:     i3block blocks,   updated filesize %d\n", filesize);
         }
         if(filesize <= 0) {
           break;
@@ -843,6 +722,10 @@ int f_remove(char* filepath, int empty_dir) {
 }
 
 int f_read(void* buffer, int bsize, int fd) {
+  if(fd < 0) {
+    printf("f_read: Invalid file descriptor!\n");
+    return FAIL;
+  }
   struct file_table_entry* entry = open_ft->entries[fd];
   if(entry == NULL) {
     printf("f_read:     Invalid file descriptor!\n");
@@ -857,7 +740,6 @@ int f_read(void* buffer, int bsize, int fd) {
     return FAIL;
   }
   if(bsize + entry->offset < BLOCKSIZE) {
-    //printf("f_read:    easy case\n");
     int fileoffset = cur_disk.data_region_offset + entry->block_offset * BLOCKSIZE + entry->offset;
     lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
     if(read(cur_disk.diskfd, buffer, bsize) != bsize) {
@@ -867,18 +749,14 @@ int f_read(void* buffer, int bsize, int fd) {
     entry->offset += bsize;
     return bsize;
   }
-  //printf("f_read: hard case\n");
 
   struct table* datatable = (struct table*)malloc(sizeof(struct table));
   get_tables(entry, datatable);
-  //int end_offset = (BLOCKSIZE - entry->offset) % BLOCKSIZE;
   int bytes_toread = bsize;
   while(bytes_toread > 0) {
-    //printf("Currently block offset %d  and offset %d and index %d\n", entry->block_offset, entry->offset, entry->block_index);
     int fileoffset = cur_disk.data_region_offset + entry->block_offset * BLOCKSIZE + entry->offset;
     lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
     void* cur_buffer = buffer + (bsize - bytes_toread);
-    //printf("currrently reading %d bytes with remaining %d bytes\n", bsize - bytes_toread, bytes_toread);
     if(bytes_toread >= BLOCKSIZE - entry->offset) {
       int cur_read = BLOCKSIZE - entry->offset;
       if(read(cur_disk.diskfd, cur_buffer, cur_read) != cur_read) {
@@ -907,6 +785,10 @@ int f_read(void* buffer, int bsize, int fd) {
 
 
 int f_stat(int fd, struct fst* st) {
+  if(fd < 0) {
+    printf("f_stat: Invalid file descriptor!\n");
+    return FAIL;
+  }
   struct file_table_entry* entry = open_ft->entries[fd];
   if(entry == NULL) {
     printf("f_stat:     Invalid file descriptor\n");
@@ -924,6 +806,10 @@ int f_stat(int fd, struct fst* st) {
 
 int f_seek(int fd, int offset, int whence) {
   // check for invalid inputs
+  if(fd < 0) {
+    printf("f_seek: Invalid file descriptor!\n");
+    return FAIL;
+  }
   if(offset < 0) {
     printf("f_seek:   invalid offset: offset cannot be negative numbers\n");
     return FAIL;
@@ -1009,6 +895,9 @@ int f_seek(int fd, int offset, int whence) {
 }
 
 int f_rewind(int fd) {
+  if(fd < 0) {
+    return FAIL;
+  }
   struct file_table_entry* target = open_ft->entries[fd];
   if (target == NULL) {
     printf("f_rewind:   Invalid file descriptor\n");
@@ -1018,12 +907,10 @@ int f_rewind(int fd) {
   target->block_index = 0;
   target->offset = 0;
   if(target_inode->size == 0) {
-    //printf("f_rewind:   Rewinding an empty file\n");
     target->block_offset = UNDEFINED;
   } else {
     target->block_offset = target_inode->dblocks[0];
   }
-  //printf("f_rewind:   file %s :new block_offset is %d and offset %d\n", open_ft->entries[fd]->filepath, open_ft->entries[fd]->block_offset, open_ft->entries[fd]->offset);
   return SUCCESS;
 }
 
@@ -1044,16 +931,13 @@ int f_open(char* filepath, int access, int mode) {
 
   // check whether directories along the filepath exists
   while(curdir != NULL) {
-    // printf("f_open:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
     // get complete path
     if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
       free_parse(parse_path);
       printf("f_open: filepath invalid: file path too long\n");
       return FAIL;
     }
-    //if(parent_fd != cur_disk.rootdir_fd){
     strcat(parent_path, "/");
-    //}
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
@@ -1062,24 +946,19 @@ int f_open(char* filepath, int access, int mode) {
     if(curdir == NULL){
       break;
     }
-    //printf("f_open:     2:      parent path for fopen is: %s\n", parent_path);
     parent_fd = f_opendir(parent_path);
     if(parent_fd == FAIL) {
       printf("f_open: Directory %s along the way does not exists\n", parent_path);
       free_parse(parse_path);
       return FAIL;
     }
-    //printf("f_open:   3:     parent_fd is %d\n", parent_fd);
   }
-  //printf("f_open:  4:     parent fd is %d\n", parent_fd);
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
-  //printf("f_open: 5:    checking whether file %s exists in directory with fd %d\n", prevdir, parent_fd);
   f_seek(parent_fd, 0, SEEK_SET);
   struct dirent* target_file = checkdir_exist(parent_fd, prevdir);
 
   // if file exists
   if (target_file != NULL) {
-    //printf("fopen:    pre66: file %s eixsts\n", prevdir);
     if(target_file->type != REG) {
       printf("fopen:     file %s is not a regular file\n", prevdir);
       free_parse(parse_path);
@@ -1098,27 +977,19 @@ int f_open(char* filepath, int access, int mode) {
         }
         struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
         printf("fopen:     return value fd is %d\n", openfile->fd);
+	free_parse(parse_path);
         free(target_file);
         return openfile->fd;
       } else if (access == OPEN_W) {
         // needs to remove the file and open and new one;
         //f_remove
-
-        //printf("f_open:     88:       rrrrremove and ccccccreating new file\n");
         int removeres = f_remove(filepath, FALSE);
         assert(removeres == SUCCESS);
         int new_file_inode = create_file(parent_fd, prevdir, REG, mode);
         struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
         free(target_file);
+	free_parse(parse_path);
         return new_entry->fd;
-        /*
-	  printf("need to remove first but now just return\n");
-	  struct file_table_entry* openfile = create_entry(parent_fd, target_file->inode_index, prevdir, access, REG);
-	  printf("fopen: 7:     return value fd is %d\n", openfile->fd);
-	  free(target_file);
-	  return openfile->fd;
-        */
-
       }
     }
 
@@ -1129,18 +1000,19 @@ int f_open(char* filepath, int access, int mode) {
     // open with create_entry and return the fd
     if(access == OPEN_R) {
       printf("f_open:     cannot read a not existing file!\n");
+      free_parse(parse_path);
       free(target_file);
       return FAIL;
     }
 
-    //printf("f_open:     8:       ccccccreating new file\n");
     int new_file_inode = create_file(parent_fd, prevdir, REG, mode);
     struct file_table_entry* new_entry = create_entry(parent_fd, new_file_inode, prevdir, access, REG);
     free(target_file);
+    free_parse(parse_path);
     return new_entry->fd;
   }
-  //printf("fopen:    9:      the end\n");
   free(target_file);
+  free_parse(parse_path);
   return FAIL;
 }
 
@@ -1148,13 +1020,14 @@ int f_open(char* filepath, int access, int mode) {
 int f_write(void* buffer, int bsize, int fd) {
   //char name[20] __attribute__((cleanup(scope)));
   //sprintf(name, "f_write:%d ",fd);
+  if(fd < 0) {
+    return FAIL;
+  }
   struct file_table_entry* writeto = open_ft->entries[fd];
   if(writeto == NULL) {
     printf("f_write:    invalid file descriptor\n");
   }
-  //printf("w1\n");
   struct inode* write_inode = (struct inode*)(cur_disk.inodes + writeto->inode_index * INODE_SIZE);
-  //printf("w2\n");
   // invalid fd
   if(writeto == NULL) {
     printf("f_write: invalid fd\n");
@@ -1166,16 +1039,13 @@ int f_write(void* buffer, int bsize, int fd) {
     return FAIL;
   }
 
-  //printf("f_write:     111111first:  fd is %d cur data block index %d offset %d\n", fd, writeto->block_index, writeto->offset);
   if(write_inode->dblocks[0] == UNDEFINED) {
     int first_data_blockoffset = get_next_freeOffset();
     if(first_data_blockoffset == FAIL) {
       printf("f_write:   empty:      get next free block for data failed\n");
       return FAIL;
     }
-    //printf("fwrite:   --------------- gettting a new block? %d\n", first_data_blockoffset);
     write_inode->dblocks[0] = first_data_blockoffset;
-    //printf("File inode %d dblocks is %d\n", write_inode->inode_index, write_inode->dblocks[0]);
     writeto->block_index = 0;
     writeto->block_offset = first_data_blockoffset;
     write_inode->last_block_offset = first_data_blockoffset;
@@ -1192,46 +1062,30 @@ int f_write(void* buffer, int bsize, int fd) {
   int byte_to_write = bsize;
 
   while(byte_to_write > 0) {
-    //printf("f_write ::::::: currently bytetowrite %d block offset %d with offset %d and block index %d\n", byte_to_write, writeto->block_offset, writeto->offset, writeto->block_index);
-    //printf("f_write: inode has last block offset %d\n", write_inode->last_block_offset);
     int fileOffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
     lseek(cur_disk.diskfd, fileOffset, SEEK_SET);
 
     if(byte_to_write >= BLOCKSIZE - writeto->offset) {
       int cur_write_bytes = BLOCKSIZE - writeto->offset;
       void* cur_write = buffer + (bsize - byte_to_write);
-      //printf("f_write:    larger than block currently writing %d bytes with fle offset %d\n", cur_write_bytes, fileOffset);
       if(write(cur_disk.diskfd, cur_write, cur_write_bytes) != cur_write_bytes) {
         printf("f_write: writing %d byte failed\n", bsize - byte_to_write);
         free_struct_table(datatable);
         return FAIL;
       }
-      //printf("f_write: before get\n");
       get_next_boffset(datatable, writeto);
       byte_to_write -= cur_write_bytes;
 
       if(writeto->block_offset == write_inode->last_block_offset) {
         int last_inblock_offset = write_inode->size % BLOCKSIZE;
-        //printf("f_write:   Old in block offset data for offset %d and size %d\n", last_inblock_offset, write_inode->size);
         if(writeto->offset + cur_write_bytes > last_inblock_offset) {
           write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
-          //printf("f_write:   after update in 1 new size %d\n", write_inode->size);
         }
       }
 
-      // need to fill up the current block, and then get the next block, update block_index, block_offset, offset = 0; and possible
-      // last_block_offset, and file size
-      //get next boffset
-      //1. write the data into the current block
-      //2. call get_next_boffset, which will update datatable and entry, and inode when applciable
-      ////not need 3. update file entry's block_index ++, blockoffset to return valueof getnextboffset, and offset = 0
     } else {
       int cur_write_bytes = byte_to_write;
       void* cur_buffer = buffer + (bsize - byte_to_write);
-      // hard code:
-      //printf("fwriteL hahahhaha buffer: %d\n", ((int*)cur_buffer)[0]);
-
-      //printf("f_write:     cur data block offset %d offset %d and inode last block offset %d and size %d\n", writeto->block_offset, writeto->offset, write_inode->last_block_offset, write_inode->size);
       int fileoffset = cur_disk.data_region_offset + writeto->block_offset * BLOCKSIZE + writeto->offset;
       lseek(cur_disk.diskfd, fileoffset, SEEK_SET);
       if(write(cur_disk.diskfd, cur_buffer, cur_write_bytes) != cur_write_bytes) {
@@ -1244,14 +1098,11 @@ int f_write(void* buffer, int bsize, int fd) {
         int last_inblock_offset = write_inode->size % BLOCKSIZE;
         if(writeto->offset + cur_write_bytes > last_inblock_offset) {
           write_inode->size += (cur_write_bytes + writeto->offset - last_inblock_offset);
-          //printf("f_write: 2  last block new size %d\n", write_inode->size);
         }
       }
       writeto->offset += byte_to_write;
       byte_to_write -= cur_write_bytes;
-      //printf("f_write:\t before sssssseek block index %d and offset %d\n", writeto->block_index, writeto->offset);
       f_seek(fd, 0, SEEKSET);
-      //printf("f_write:\t after ssssseek block index %d and offset %d\n", writeto->block_index, writeto->offset);
     }
   }
   write_disk_inode();
@@ -1272,18 +1123,14 @@ int f_close(int fd) {
   }
   if(entry->inode_index == ROOT_INDEX) {
     // need root directory to check
-    //printf("f_close:  2:  cannot close root directory. Root directory will be close when unmount\n");
     return FAIL;
   }
-  //printf("1\n");
   if(entry->type == DIR && entry->open_num > 0) {
     printf("f_close:   Cannot close directories containing opened files.\n");
     return FAIL;
   }
-  //printf("2\n");
   char filepath[MAX_LENGTH];
   int copylength = strlen(entry->filepath);
-  //printf("3\n");
   for(int i = strlen(entry->filepath) - 1; i >= 0; i --) {
     if(entry->filepath[i] != '/') {
       copylength --;
@@ -1292,18 +1139,12 @@ int f_close(int fd) {
       break;
     }
   }
-  //printf("orginal path is %s  copylength is %d\n", entry->filepath, copylength);
-  //printf("4\n");
   strncpy(filepath, entry->filepath, copylength);
-  //printf("5\n");
   filepath[copylength] = '\0';
-  //printf("6\n");
-  //printf("f_close:  copytlength is %d and the resultinf parent path is %s\n", copylength, filepath);
   struct file_table_entry* parent_entry = NULL;
   if(strcmp(filepath, "/") == SUCCESS) {
     parent_entry = open_ft->entries[cur_disk.rootdir_fd];
   } else {
-    //printf("f_close:  getting the parent entry\n");
     for(int i = 0 ; i < MAX_OPENFILE; i++) {
       if(open_ft->entries[i] != NULL) {
         if(strcmp(open_ft->entries[i]->filepath, filepath) == SUCCESS) {
@@ -1313,21 +1154,15 @@ int f_close(int fd) {
       }
     }
   }
-  //printf("7 parent filepath is %s\n", filepath);
   if(parent_entry == NULL) {
-    //printf("f_close:    parent directory is already close. Something went wrong...\n");
     return FAIL;
   }
   if(parent_entry->open_num <= 0) {
-    //printf("f_close:    ATTENTION parent directory has wrong 'open_num'\n");
     return FAIL;
   }
-  //printf("8\n");
   parent_entry->open_num --;
-  //printf("9\n");
   bzero(entry, sizeof(struct file_table_entry));
   free(entry);
-  //printf("10\n");
   // update file table
   open_ft->free_id[fd] = fd;
   open_ft->free_fd_num ++;
@@ -1370,16 +1205,13 @@ int f_mkdir(char* filepath, int mode) {
 
   // check whether directories along the filepath exists
   while(curdir != NULL) {
-    //printf("f_mkdir:   1:    current file token is %s, parent path is %s and parent fd %d\n", curdir, parent_path, parent_fd);
     // get complete path
     if(strlen(parent_path) + strlen(curdir) + strlen("/") >= MAX_LENGTH) {
       free_parse(parse_path);
       printf("f_mkdir: filepath invalid: file path too long\n");
       return FAIL;
     } 
-    //if(parent_fd != cur_disk.rootdir_fd){
     strcat(parent_path, "/");
-    //}
     strcat(parent_path, curdir);
     // check if parent directory exists
     count ++;
@@ -1388,14 +1220,12 @@ int f_mkdir(char* filepath, int mode) {
     if(curdir == NULL){
       break;
     }
-    //printf("f_mkdir:     2:      parent path for fopen is: %s\n", parent_path);
     parent_fd = f_opendir(parent_path);
     if(parent_fd == FAIL) {
       printf("f_mkdir: Directory %s along the way does not exists\n", parent_path);
       free_parse(parse_path);
       return FAIL;
     }
-    //printf("f_mkdir:   3:     parent_fd is %d\n", parent_fd);
   }
   // now prevdir contains the file to be OPENED, parent dir is the parent Directory
   f_seek(parent_fd, 0, SEEKSET);
@@ -1403,24 +1233,29 @@ int f_mkdir(char* filepath, int mode) {
   if(target_file != NULL) {
     if(target_file->type == DIR) {
       printf("f_mkdir:      directory %s already exists\n", filepath);
+      free_parse(parse_path);
       free(target_file);
       return FAIL;
     } else {
-      //printf("f_mkdir: 6 creatting same name\n");
       int new_index = create_file(parent_fd, prevdir, DIR, mode);
       free(target_file);
+      free_parse(parse_path);  
       return new_index;
     }
   }
   printf("f_mkdir:  Creating a new directory %s\n", filepath);
   int new_index = create_file(parent_fd, prevdir, DIR, mode);
   free(target_file);
+  free_parse(parse_path);  
   return new_index;
 }
 
 
 int f_rmdir(char* filepath) {
   int dir_fd = f_opendir(filepath);
+  if(dir_fd < 0) {
+    return FAIL;
+  }
   f_rewind(dir_fd);
   struct dirent* cur_dir = f_readdir(dir_fd);
   while(cur_dir != NULL) {
@@ -1548,40 +1383,25 @@ static void free_parse(char** parse_result) {
 
 static struct dirent* checkdir_exist(int parentdir_fd, char* target) {
   f_seek(parentdir_fd, 0, SEEKSET);
-  //printf("========== checking %s exists in fd %d\n", target, parentdir_fd);
   struct file_table_entry* origin = open_ft->entries[parentdir_fd];
-  //printf("checkdir getting fd %d origin is  NULL? %d\n", parentdir_fd, origin==NULL);
   int org_offset = origin->offset;
   int org_block_index = origin->block_index;
   int org_block_offset = origin->block_offset;
-  //printf("\ncheckdir: \t !!!!!!!!!!cur block_offset %d and offset %d\n\n", origin->block_offset, org_offset);
-
   struct dirent* temp = f_readdir(parentdir_fd);
-  //printf("\ncheckdir: \t ---- afte readdir !!!!!!!!!!cur block_index %d and offset %d\n\n", org_block_index, org_offset);
-  //printf("checkdir exists: OOOOFset parentdir fd is %d origin offset is %d\n", parentdir_fd, origin->offset);
   while(temp != NULL) {
-    //printf("Now checking %s\n", temp->filename);
     if(strcmp(temp->filename, target) == SUCCESS) {
-      //printf("*|*|*|* In check, exists cur dirent filename %s, and target name %s\n", temp->filename, target);
       origin->offset = org_offset;
       origin->block_index = org_block_index;
       origin->block_offset = org_block_offset;
-      //printf("?????? org_block_offset %d\n", org_block_offset);
-      //printf("+++++++++++++----- checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
       return temp;
     }
-    //printf(" checkdir exists:   %s not match assigning new dirent\n", temp->filename);
     free(temp);
     temp = f_readdir(parentdir_fd);
-    //printf("checkdir exists after assign temp\n");
   }
-  //printf("?????? ----- org_block_offset %d\n", org_block_offset);
-  //printf("Checkdir:  %s does not exists in %s\n", target, origin->filepath);
   origin->offset = org_offset;
   origin->block_index = org_block_index;
   origin->block_offset = org_block_offset;
-  //printf("?????? org_block_offset %d\n", org_block_offset);
-  //printf("+++++++++++++ checkdir end offset %d blockindex %d blockoffset %d for fd %d\n", origin->offset, origin->block_index, origin->block_offset, parentdir_fd);
+  free(temp);
   return NULL;
 }
 
@@ -2497,6 +2317,7 @@ static int remove_dirent(int parent_fd, int parent_inode, int child_inode) {
   struct table* datatable = malloc(sizeof(struct table));
   get_tables(parent_entry, datatable);
   parentinode->last_block_offset = datatable->cur_data_table[datatable->intable_index];
+  free_struct_table(datatable);
   return SUCCESS;
 }
 
@@ -2551,7 +2372,7 @@ int change_mode(int mode, char* filepath) {
   if(fd == FAIL) {
     fd = f_opendir(filepath);
   }
-  if(fd == FAIL) {
+  if(fd < 0) {
     printf("Changing the mode for file %s failed. \n", filepath);
     return TRUE;
   }
@@ -2559,5 +2380,6 @@ int change_mode(int mode, char* filepath) {
   struct inode* target = (struct inode*)(cur_disk.inodes + entry->inode_index * INODE_SIZE);
   target->permissions = mode;
   write_disk_inode();
+  f_close(fd);
   return TRUE;
 }

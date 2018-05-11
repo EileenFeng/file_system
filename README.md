@@ -10,17 +10,17 @@
 
 - What works & does not work
   - most library functions work. However 'f_read' and 'f_write' have some issues for large files that reaches 'i3block' level.
-  - Does not support permissions: When user created a file or directory, all file and directory created will have the default permission.
+  - Does not support permissions: When user created a file or directory, all file and directory created will have the default permission. When user try to access files, file permissions are not fully checked. However 'f_open' an existing file will truncate that file. 
   
   - shell commands:
-    - redirection: supports redirection with 'cat' and redirection with system build in commands, however does not support redirecting the shell commands implemented by this project. For instance: 'ps aux > haha.txt' will direct the output to haha.txt, however 'ls > haha.txt' does not work, will possibly cause the shell to terminate or other undefined behaviors. 
+    - redirection: supports redirection with 'cat' and redirection with system build in commands, however does not support redirecting the shell commands implemented by this project. For instance: 'ps aux > haha.txt' will direct the output to haha.txt, however 'ls > haha.txt' does not work, will possibly cause the shell to terminate or other undefined behaviors. Requires proper spacing. 
     - ls: supports '-F' and '-l' flags
     - mkdir: supports 'mkdir <dir_name>', does not support entering permission of the directory created
     - rmdir: works when entering the corret path;
-    - chmod: Not yet implemented.... 
+    - chmod: mostly working, however changing the modes does not affect how users access files. Require the second argument to be the new mode. Requires proper spacing. 
     - cd: mostly works
     - pwd: mostly works
-    - cat: mostly works with decent size files (large files that reaches 'i3block' level might have issues because of 'f_read' and 'f_write'
+    - cat: mostly works with decent size files (large files that reaches 'i3block' level might have issues because of 'f_read' and 'f_write' with large files. Support 'cat >> <filename>' for appending. Requires proper spacing. 
     - more: Not implemented... Do not have enough time
     - mount: supports mounting at a specific position. For instance, when a regular user logged in and typed in 'mount eileen', the current working directory of the user, right after mounting, will be at the mounting point, aka 'home/rusr/eileen'. Does not support nested mounting!
     - unmount: mostly works
@@ -30,6 +30,6 @@
   - Does not fully support nested mounting: after mounting one disk, cannot mount another disk under the mounted disk, will cause issue with current working directory and undefined behaviors.
   - Have Issues with 'f_read' and 'f_write' with large files, especially when reaches 'i3block' level
   - Small number of free blocks is lost after removing files. This is a corner cases that failed to be handled: When a file is removed, the corresponding 'dirent' is removed from the parent directory. At this point, if the parent directory becomes empty, the data block that it used to store the dirent for deleted files will be lost. Same cases applys when the parent directory is extremely large and reachs hight levels: 'indirect', 'i2block', 'i3block'.
-  - Does not support changing permissions
+  - Does not support permission checking for files. 'chmod' is implemented, however when files are accessed, file's permissions are not fully checked. 
   - Memory Leaks: a lot... Did not have enough time to handle.... :( (really sad face)
-  
+  - Error handling is not fully implemented due to time issue. Under most cases no segmentation faults would occur, but rarely it happened, most usually due to incomplete error handling. 

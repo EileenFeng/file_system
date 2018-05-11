@@ -257,7 +257,7 @@ int remove_file(char* filepath) {
 int cat_file(char* filepath) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);
-  int filefd = f_open(fspath, OPEN_WR, RWE);
+  int filefd = f_open(fspath, OPEN_R, RWE);
   if(filefd == FAIL) {
     printf("Open file %s for read failed\n", filepath);
     return TRUE;
@@ -517,9 +517,6 @@ int redirect_write_file(char** args, int arg_num, char* filepath) {
     strcat(command, args[i]);
     strcat(command, " ");
   }
-  printf("command is %s\n", command);
-  printf("here in redirect\n");
-  printf("command is %s\n", command);
   FILE* fp = popen(command, "r");
   if (fp == NULL) {
     printf("Error executing command %s\n", command);
@@ -682,6 +679,10 @@ int exec_args(char** args, char*input, int free_args) {
         value = handle_cd(args[1]);
       }
     }else if(strcmp(args[0], "exit") == SUCCESS) { // if the command is exit
+      if(mounted == TRUE) {
+	unmount();
+	mounted = FALSE;
+      }
       return 0;
     } else {
       if(argnum >= 3) {
