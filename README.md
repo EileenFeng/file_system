@@ -14,7 +14,7 @@
   
   - shell commands:
     - redirection: supports redirection with 'cat' and redirection with system build in commands, however does not support redirecting the shell commands implemented by this project. For instance: 'ps aux > haha.txt' will direct the output to haha.txt, however 'ls > haha.txt' does not work, will possibly cause the shell to terminate or other undefined behaviors. Requires proper spacing. 
-    - ls: supports '-F' and '-l' flags
+    - ls: roughly supports '-F' and '-l' flags
     - mkdir: supports 'mkdir <dir_name>', does not support entering permission of the directory created
     - rmdir: works when entering the corret path;
     - chmod: mostly working, however changing the modes does not affect how users access files. Require the second argument to be the new mode. Requires proper spacing. 
