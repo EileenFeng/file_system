@@ -26,5 +26,5 @@ int f_unmount();
 
 // helper for shell
 void get_inode(int inode_index);
-
+int change_mode(int mode, char* filepath);
 #endif

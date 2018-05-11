@@ -66,6 +66,7 @@ static int print_free();
 static void scope(char* name);
 static int check_permission(struct inode* target, int access);
 void get_inode(int inode_index);
+int change_mode(int mode, char* filepath);
 /************************ LIB FUNCTIONS *****************************/
 
 int f_mount(char* sourcepath) {
@@ -1474,14 +1475,33 @@ int print_openft(){
     }
   }
   printf("=======================================================\n");
+  return TRUE;
 }
 
 void get_inode(int inode_index) {
   struct inode* target = (struct inode*)(cur_disk.inodes + inode_index * INODE_SIZE);
+  char permission[20];
+  if(target->permissions == R) {
+    strcpy(permission, "r--");
+  } else if(target->permissions == RW) {
+    strcpy(permission, "rw-");
+  } else if(target->permissions == RWE) {
+    strcpy(permission, "rwx");
+  }else if(target->permissions == W) {
+    strcpy(permission, "-w-");
+  }else if(target->permissions == WE) {
+    strcpy(permission, "-wx");
+  }else if(target->permissions == N) {
+    strcpy(permission, "---");
+  }else if(target->permissions == RE) {
+    strcpy(permission, "r-x");
+  }else if(target->permissions == E) {
+    strcpy(permission, "--x");
+  }
   if(target->type == DIR) {
-    printf("[type]: DIR\t[permission]: %d\t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", target->permissions, target->size, target->uid,target->gid);
+    printf("[type]: DIR \t[permission]: %s \t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", permission, target->size, target->uid,target->gid);
   } else if(target->type == REG) {
-    printf("[type]: REG\t[permission]: %d\t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", target->permissions, target->size, target->uid,target->gid);
+    printf("[type]: REG \t[permission]: %s \t [filesize]: %d \t[uid]: %d\t [gid]: %d\t", permission, target->size, target->uid,target->gid);
   }
 }
 
@@ -2524,4 +2544,20 @@ static int print_free() {
 void scope(char* name) {
   //printf("\n**********%s finishes\n", name);
   //print_free();
+}
+
+int change_mode(int mode, char* filepath) {
+  int fd = f_open(filepath, OPEN_R, R);
+  if(fd == FAIL) {
+    fd = f_opendir(filepath);
+  }
+  if(fd == FAIL) {
+    printf("Changing the mode for file %s failed. \n", filepath);
+    return TRUE;
+  }
+  struct file_table_entry* entry = open_ft->entries[fd];
+  struct inode* target = (struct inode*)(cur_disk.inodes + entry->inode_index * INODE_SIZE);
+  target->permissions = mode;
+  write_disk_inode();
+  return TRUE;
 }

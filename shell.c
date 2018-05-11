@@ -92,6 +92,53 @@ int mount_disk(char* mounting_point) {
   return ret == SUCCESS;
 }
 
+
+int changemode(char* mode, char* filepath) {
+  int new_mode = FAIL;
+  if(atoi(mode) == FALSE && strcmp(mode, "0") != SUCCESS) {
+    if(strcmp(mode, "r--") == SUCCESS){
+      new_mode = R;
+    } else if(strcmp(mode, "-w-") == SUCCESS){
+      new_mode = W;
+    }else if(strcmp(mode, "rw-") == SUCCESS){
+      new_mode = RW;
+    }else if(strcmp(mode, "r-x") == SUCCESS){
+      new_mode = RE;
+    }else if(strcmp(mode, "-wx") == SUCCESS){
+      new_mode = WE;
+    }else if(strcmp(mode, "rwx") == SUCCESS){
+      new_mode = RWE;
+    }else if(strcmp(mode, "---") == SUCCESS){
+      new_mode = N;
+    }else if(strcmp(mode, "--x") == SUCCESS){
+      new_mode = E;
+    }
+    } else {
+    new_mode = atoi(mode);
+    if(new_mode == 0){
+      new_mode = N;
+    } else if(new_mode == 1){
+      new_mode = E;
+    }else if(new_mode == 2){
+      new_mode = W;
+    }else if(new_mode == 3){
+      new_mode = WE;
+    }else if(new_mode == 4){
+      new_mode = R;
+    }else if(new_mode == 5){
+      new_mode = RE;
+    }else if(new_mode == 6){
+      new_mode = RW;
+    }else if(new_mode == 7){
+      new_mode = RWE;
+    }
+  }
+  char fspath[MAX_LENGTH];
+  parse_inputpath(filepath, fspath, FALSE);
+  change_mode(new_mode, fspath);
+  return TRUE;
+}
+
 int handle_ls(char* filepath, int flags) {
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);
@@ -142,6 +189,7 @@ int handle_ls(char* filepath, int flags) {
 
 int make_dir(char* filepath, char* mode) {
   int dirmode = 0;
+  /*
   if(strcmp(mode, "R") == SUCCESS) {
     dirmode  = R;
   } else if(strcmp(mode, "W") == SUCCESS) {
@@ -157,10 +205,29 @@ int make_dir(char* filepath, char* mode) {
   }else if(strcmp(mode, "RWE") == SUCCESS) {
     dirmode  = RWE;
   }
+  */
+ int new_mode = FAIL;
+ if(strcmp(mode, "r--") == SUCCESS){
+    new_mode = R;
+  } else if(strcmp(mode, "-w-") == SUCCESS){
+    new_mode = W;
+  }else if(strcmp(mode, "rw-") == SUCCESS){
+    new_mode = RW;
+  }else if(strcmp(mode, "r-x") == SUCCESS){
+    new_mode = RE;
+  }else if(strcmp(mode, "-wx") == SUCCESS){
+    new_mode = WE;
+  }else if(strcmp(mode, "rwx") == SUCCESS){
+    new_mode = RWE;
+  }else if(strcmp(mode, "---") == SUCCESS){
+    new_mode = N;
+  }else if(strcmp(mode, "--x") == SUCCESS){
+    new_mode = E;
+  }
     // parse file path and call lib function
   char fspath[MAX_LENGTH];
   parse_inputpath(filepath, fspath, FALSE);
-  int mkdir = f_mkdir(fspath, dirmode);
+  int mkdir = f_mkdir(fspath, new_mode);
   if(mkdir == FAIL) {
     printf("Creating directory %s failed\n", filepath);
   }
@@ -484,7 +551,7 @@ int redirect_write_file(char** args, int arg_num, char* filepath) {
   printf("Write  %d bytes\n", totalwrite);
   f_close(fildes);
   printf("End of f_close\n");
-  free(args);
+  //free(args);
   return TRUE;
 }
 
@@ -543,12 +610,19 @@ int exec_args(char** args, char*input, int free_args) {
           value =  handle_ls(args[2], LFLAG);
         }
       }
+    } else if(strcmp(args[0], "chmod") == SUCCESS) {
+      if(argnum < 3) {
+        printf("Invalid input!\n");
+        value = TRUE;
+      } else {
+        value = changemode(args[1], args[2]);
+      }
     } else if(strcmp(args[0], "mkdir") == SUCCESS) {
       if(argnum < 2) {
         printf("Invalid input!\n");
       } else if(argnum <= 2) {
-        printf("Directory %s is created with default permission RWE\n",args[1] );
-        value = make_dir(args[1], "RWE");
+        printf("Directory %s is created with default permission 'rwx'\n",args[1] );
+        value = make_dir(args[1], "rwx");
       } else {
         value = make_dir(args[1], args[2]);
       }
