@@ -1,12 +1,12 @@
-# file_system
-##Eileen Feng
+# Eileen_Feng_File_System
 
 - Design Doc & Implementation
   - An updated version of design doc is included in this repo, which is not that different from the design doc that I submitted, just some minor changes for the structs for the convenience of implementing. 
-
+  - Allocated 15 blocks in total for inodes, 17408 free blocks, with blocksize 512 bytes
 
 - How to run:
   - Type in 'make' to compile, and the library is compiled under the name 'libfilesys.so'. The library functions are included in 'file_lib.c'. 
+  - The 'format' program will format a disk with 3 default directories: /home, /home/rusr (regular user), and /home/susr (super user)
 
 - What works & does not work
   - most library functions work. However 'f_read' and 'f_write' have some issues for large files that reaches 'i3block' level.
@@ -25,6 +25,10 @@
     - mount: supports mounting at a specific position. For instance, when a regular user logged in and typed in 'mount eileen', the current working directory of the user, right after mounting, will be at the mounting point, aka 'home/rusr/eileen'. Does not support nested mounting!
     - unmount: mostly works
     
+- Tests
+  - 'test.c', executable under name 'testinit', tests for opening files, reopen the file, read, and write 'i2block' level files. Needs to reformat the disk to run sometimes in order to obtain enough space and free inodes. 
+  - 'testmkdir.c' tests for making directory, creating file in the newly created directory, and remove directory.
+  - 'test_dirs.c' tests making around 40 directories. 
   
 - Limitations:
   - Does not fully support nested mounting: after mounting one disk, cannot mount another disk under the mounted disk, will cause issue with current working directory and undefined behaviors.
