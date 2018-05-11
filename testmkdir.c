@@ -40,7 +40,6 @@ int main() {
   //f_closedir(hehe);
   f_close(feichi);
   f_closedir(hehe);
-  f_stat(feichi, st);
   f_rmdir("home/hehe");
   feichi = f_open("home/hehe/feichi.txt", OPEN_W, RWE);
   f_mkdir("home/hehe", RWE);
