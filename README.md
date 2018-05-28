@@ -2,6 +2,8 @@
 
 - A file system that allows creating a disk, mounting a disk, creating, removing, editing files and directories. File editing including overwriting (open an existing file to write will truncate the file), as well as appending (appending new things to the end of the file). File seeking is also available. 
 
+- Design doc are available under 'Eileen_File_System_DesignDoc.pdf'
+
 - File system functions implementation are available in 'file_lib.h' and 'file_lib.c'
 
 - Design Doc & Implementation
